@@ -1,0 +1,1343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Plans from Demonstrations, Skills from RL</title>
+<meta name="description" content="Two simulated robot arms rebuild, dismantle and fill towers of Jenga-style blocks from camera images. The task plan comes from demonstrations, the contact skills from reinforcement learning, and an agentic teacher-student system strings them together.">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Plans from Demonstrations, Skills from Reinforcement Learning">
+<meta property="og:description" content="An agentic teacher and student for long-horizon bimanual tower manipulation (TOWER challenge, G2A workshop at CoRL 2026).">
+<meta property="og:url" content="https://visakk.github.io/agentic-tower/">
+<meta property="og:image" content="https://visakk.github.io/agentic-tower/assets/img/og.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2300897B'/%3E%3Crect x='7' y='21' width='18' height='4.5' rx='1' fill='white'/%3E%3Crect x='7' y='14.5' width='7.5' height='4.5' rx='1' fill='white'/%3E%3Crect x='17.5' y='14.5' width='7.5' height='4.5' rx='1' fill='white'/%3E%3Crect x='7' y='8' width='18' height='4.5' rx='1' fill='white'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" integrity="sha384-nB0miv6/jRmo5UMMR1wu3Gz6NLsoTkbqJghGIsx//Rlm+ZU03BU6SQNC66uf4l5+" crossorigin="anonymous">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" integrity="sha384-7zkQWkzuo3B5mTepMUcHkMB5jZaolc2xDwL6VFqjFALcbeS9Ggm/Yr2r3Dy4lfFg" crossorigin="anonymous"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js" integrity="sha384-43gviWU0YVjaDtb/GhzOouOXtZMP/7XUzwPTstBeZFe/+rCMvRwr4yROQP43s0Xk" crossorigin="anonymous"
+  onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'\\(',right:'\\)',display:false}],throwOnError:false})"></script>
+<style>
+  :root {
+    --bg: #ffffff;
+    --surface: #f5f7f8;
+    --ink: #1c2732;
+    --muted: #5b6874;
+    --rule: #dde3e7;
+    --rule-strong: #b7c1c9;
+    --link: #1f5fbf;
+    --teal: #00897b;
+    --teal-ink: #006b60;
+    --teal-bg: #e0f2ef;
+    --amber: #b26a00;
+    --amber-ink: #8a5200;
+    --amber-bg: #fbefdc;
+    --blue: #2f6fd0;
+    --blue-ink: #1f56a8;
+    --blue-bg: #e4edfb;
+    --grey: #6b7785;
+    --grey-bg: #eef1f4;
+    --button: #1c2732;
+    --button-ink: #ffffff;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1418;
+      --surface: #172027;
+      --ink: #e6edf2;
+      --muted: #9aa8b4;
+      --rule: #2a3640;
+      --rule-strong: #43525e;
+      --link: #79aef5;
+      --teal: #3fb8a8;
+      --teal-ink: #5fd0c0;
+      --teal-bg: #12302c;
+      --amber: #e0a050;
+      --amber-ink: #f0b868;
+      --amber-bg: #3a2a14;
+      --blue: #6ea8ff;
+      --blue-ink: #8dbbff;
+      --blue-bg: #16253d;
+      --grey: #8b98a5;
+      --grey-bg: #1d2730;
+      --button: #e6edf2;
+      --button-ink: #0f1418;
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 17px/1.62 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overflow-wrap: break-word;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 0 16px; }
+  header { text-align: center; padding: 56px 0 28px; }
+  h1 { font-size: clamp(1.7rem, 4.2vw, 2.55rem); line-height: 1.2; margin: 0 0 22px; letter-spacing: -0.01em; }
+  h1 .sub { display: block; font-weight: 500; font-size: 0.62em; color: var(--muted); margin-top: 10px; }
+  .author { font-size: 1.15rem; font-weight: 600; margin: 0; }
+  .affil, .date { color: var(--muted); margin: 2px 0 0; }
+  .date { font-size: 0.95rem; margin-top: 10px; }
+  .buttons { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 24px; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 9px 18px; border-radius: 999px;
+    background: var(--button); color: var(--button-ink);
+    text-decoration: none; font-weight: 600; font-size: 0.95rem;
+    transition: opacity .15s ease;
+  }
+  .btn:hover { opacity: 0.82; }
+  .btn svg { width: 17px; height: 17px; }
+  .teaser { margin: 8px 0 0; }
+  video { width: 100%; display: block; border-radius: 12px; background: #0e1116; }
+  figcaption, .caption { color: var(--muted); font-size: 0.92rem; margin-top: 10px; line-height: 1.5; }
+  section { padding: 34px 0 6px; }
+  h2 { font-size: 1.55rem; margin: 0 0 14px; letter-spacing: -0.005em; }
+  h3 { font-size: 1.17rem; margin: 30px 0 8px; }
+  h4 { font-size: 1rem; margin: 22px 0 6px; }
+  p { margin: 0 0 14px; }
+  ul, ol { margin: 0 0 14px; padding-left: 1.3em; }
+  li { margin: 0 0 6px; }
+  @media (min-width: 700px) { .summary p { text-align: justify; hyphens: auto; } }
+  a { color: var(--link); }
+  .toc { background: var(--surface); border: 1px solid var(--rule); border-radius: 12px; padding: 14px 18px; margin: 22px 0 0; }
+  .toc ol { margin: 6px 0 0; columns: 2 260px; column-gap: 28px; }
+  .toc li { margin: 0 0 4px; break-inside: avoid; }
+  .toc .label { font-weight: 600; font-size: 0.9rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  .card { background: #ffffff; border: 1px solid var(--rule); border-radius: 12px; padding: 10px; }
+  .card img { width: 100%; height: auto; display: block; border-radius: 6px; }
+  figure { margin: 18px 0 8px; }
+  .colhead { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; margin: 0 0 6px; font-size: 0.8rem; font-weight: 600; color: var(--muted); text-align: center; }
+  .num { font-variant-numeric: tabular-nums; }
+  .tablewrap { overflow-x: auto; margin: 16px 0 6px; }
+  table { border-collapse: collapse; width: 100%; min-width: 560px; font-size: 0.92rem; }
+  th, td { padding: 6px 9px; text-align: right; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th:first-child, td:first-child { text-align: left; }
+  td.l, th.l { text-align: left; }
+  thead th { color: var(--muted); font-weight: 600; border-bottom: 2px solid var(--rule); }
+  tr.group td { color: var(--muted); font-style: italic; text-align: left; padding-top: 14px; }
+  @media (max-width: 560px) {
+    table { font-size: 0.82rem; }
+    th, td { padding: 5px 6px; }
+  }
+  .callout { border-left: 3px solid var(--teal); background: var(--surface); padding: 12px 16px; border-radius: 0 10px 10px 0; margin: 16px 0; }
+  .callout.note { border-left-color: var(--amber); }
+  .diagram { overflow-x: auto; background: var(--bg); border: 1px solid var(--rule); border-radius: 12px; padding: 10px; }
+  .diagram svg { display: block; width: 100%; min-width: 640px; height: auto; }
+  .diagram text { font-family: inherit; }
+  .legend { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 0.85rem; color: var(--muted); margin: 10px 0 0; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .sw { width: 14px; height: 14px; border-radius: 3px; border: 1.5px solid; display: inline-block; }
+  .sw.learned { background: var(--teal-bg); border-color: var(--teal); }
+  .sw.planned { background: var(--amber-bg); border-color: var(--amber); }
+  .sw.demo { background: var(--blue-bg); border-color: var(--blue); }
+  .sw.priv { background: var(--grey-bg); border-color: var(--grey); border-style: dashed; }
+  .chip { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 0.84rem; font-weight: 600; border: 1.5px solid; white-space: nowrap; }
+  .chip.learned { background: var(--teal-bg); border-color: var(--teal); color: var(--teal-ink); }
+  .chip.planned { background: var(--amber-bg); border-color: var(--amber); color: var(--amber-ink); }
+  .chip.priv { background: var(--grey-bg); border-color: var(--grey); border-style: dashed; color: var(--ink); }
+  .chip.demo { background: var(--blue-bg); border-color: var(--blue); color: var(--blue-ink); }
+  .tasks td:nth-child(3), .tasks td:nth-child(5) { white-space: nowrap; }
+  .grid-table td { text-align: left; }
+  .grid-table td small { display: block; color: var(--muted); margin-top: 3px; font-size: 0.8rem; white-space: normal; }
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 760px) { .split { grid-template-columns: 1fr; } }
+  .split > div { background: var(--surface); border: 1px solid var(--rule); border-radius: 12px; padding: 12px 16px; }
+  .split h4 { margin-top: 2px; }
+  .split ul { margin-bottom: 4px; }
+  .eq-note { color: var(--muted); font-size: 0.92rem; }
+  .katex-display { overflow-x: auto; overflow-y: hidden; padding: 4px 0; }
+  details { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 8px 14px; margin: 14px 0; }
+  summary { cursor: pointer; font-weight: 600; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.88em; background: var(--surface); padding: 1px 5px; border-radius: 5px; }
+  pre {
+    background: var(--surface); border: 1px solid var(--rule); border-radius: 10px;
+    padding: 16px; overflow-x: auto; font-size: 0.85rem; line-height: 1.5; margin: 0;
+  }
+  pre code { background: none; padding: 0; }
+  .videos { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin: 16px 0; }
+  .videos figure { margin: 0; }
+  .videos figcaption { margin-top: 6px; }
+  .videos b { color: var(--ink); }
+  .chapters { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px; margin: 14px 0 0; padding: 0; list-style: none; }
+  .chapters li { margin: 0; }
+  .chapters button {
+    width: 100%; text-align: left; cursor: pointer;
+    display: flex; gap: 12px; align-items: baseline;
+    padding: 9px 12px; border-radius: 9px;
+    border: 1px solid var(--rule); background: var(--surface); color: var(--ink);
+    font: inherit; font-size: 0.93rem; line-height: 1.35;
+  }
+  .chapters button:hover, .chapters button.on { border-color: var(--teal); }
+  .chapters button.on { box-shadow: inset 3px 0 0 var(--teal); }
+  .chapters .t { font-variant-numeric: tabular-nums; color: var(--teal-ink); font-weight: 600; min-width: 2.6em; }
+  .refs { font-size: 0.9rem; padding-left: 1.6em; }
+  .refs li { margin-bottom: 6px; }
+  .bib { position: relative; }
+  .copy {
+    position: absolute; top: 10px; right: 10px; cursor: pointer;
+    font: inherit; font-size: 0.8rem; padding: 4px 10px; border-radius: 7px;
+    border: 1px solid var(--rule); background: var(--bg); color: var(--ink);
+  }
+  footer { color: var(--muted); font-size: 0.88rem; padding: 34px 0 48px; border-top: 1px solid var(--rule); margin-top: 40px; }
+  footer p { margin-bottom: 8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>Plans from Demonstrations, Skills from Reinforcement Learning
+    <span class="sub">An agentic teacher and student for long-horizon bimanual tower manipulation</span></h1>
+  <p class="author">Visak Kumar</p>
+  <p class="affil">San Francisco</p>
+  <p class="date"><time datetime="2026-11">November 2026</time></p>
+  <div class="buttons">
+    <a class="btn" href="#videos">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10 9l5 3-5 3z"/></svg>
+      Videos</a>
+    <a class="btn" href="https://github.com/VisakK/tower_rl">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5"/></svg>
+      Code</a>
+    <a class="btn" href="https://github.com/VisakK/tower_rl/blob/main/reproduce/README.md">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12a8 8 0 0 1 14-5.3M20 12a8 8 0 0 1-14 5.3M18 3v4h-4M6 21v-4h4"/></svg>
+      Reproduce</a>
+    <a class="btn" href="#bibtex">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7h4v4H7zM13 7h4v4h-4zM7 11c0 3-1 5-3 6M13 11c0 3-1 5-3 6"/></svg>
+      BibTeX</a>
+  </div>
+</header>
+
+<figure class="teaser">
+  <video src="assets/video/teaser.mp4" poster="assets/img/teaser_poster.jpg" autoplay muted loop playsinline
+         aria-label="The submitted student on four three-layer tasks, seen from the front camera"></video>
+  <figcaption>The submitted student on four three-layer tasks (transfer, cross transfer, push-down, insertion), seen
+    from one of its four cameras. Boxes are the student's own estimates of the block poses (a white box, where shown,
+    is the true pose). Simulation (Isaac Sim, PhysX); twice real speed.</figcaption>
+</figure>
+
+<section class="summary">
+  <h2>Summary</h2>
+  <p>The TOWER challenge at the G2A workshop (CoRL 2026) asks two simulated robot arms to transfer, stack, dismantle
+    and fill towers of Jenga-style blocks while seeing the scene only through four cameras. An episode lasts up to
+    210 seconds and chains as many as nine grasps, places or pushes, each with millimetre tolerances, under unknown
+    block mass, friction and tower placement. Instead of cloning the organizers' 531 demonstrations end to end, we
+    use them for what they state reliably: the task plan and the geometry of the scene. The contact skills
+    (grasping, placing, pushing) are learned with reinforcement learning in our recreation of the evaluator, and an
+    agentic controller strings them together: it calls one skill at a time, checks the outcome, and retries, skips or
+    switches arms. This teacher reads exact block poses from the simulator. We distil it into a student that uses
+    only the official observations: a keypoint network with a multi-view pose fit replaces the exact state, a
+    transformer trained with DAgger replaces the hand-written decision logic, and behaviour cloning with noise
+    injection replaces the planned insertion controllers. In our closed-loop tests on rendered camera images, the
+    submitted student succeeds in 59 of 60 transfer and stacking episodes; push-down and insertion remain the hard
+    part. Because the system is made of separate skills, learned parts can replace planned ones one at a time: after
+    the deadline, reinforcement-learned reaching replaced the planned arm motions without retraining anything else.
+    Official results are announced at the workshop on November 12.</p>
+  <nav class="toc" aria-label="Contents">
+    <span class="label">Contents</span>
+    <ol>
+      <li><a href="#problem">The problem</a></li>
+      <li><a href="#hard">Why it is hard</a></li>
+      <li><a href="#imitation">Why not imitation learning alone</a></li>
+      <li><a href="#method">An agentic robot system</a></li>
+      <li><a href="#teacher">The teacher</a></li>
+      <li><a href="#student">The student</a></li>
+      <li><a href="#pipeline">Training pipeline</a></li>
+      <li><a href="#results">Results</a></li>
+      <li><a href="#videos">Videos</a></li>
+      <li><a href="#next">Next steps: student v1.5</a></li>
+      <li><a href="#reproduce">Reproducibility</a></li>
+      <li><a href="#refs">References</a></li>
+    </ol>
+  </nav>
+</section>
+
+<section id="problem">
+  <h2>1. The problem</h2>
+  <p>Two seven-joint AgileX Nero arms with parallel grippers, called <em>left</em> and <em>back</em> after where they
+    are mounted, share a table with two tower pads. Each pad carries three fixed foundation blocks; the movable blocks
+    are 150 × 50 × 28 mm. Four RGB cameras watch the scene: two fixed cameras on opposite sides of the table and one on
+    each wrist. There are five tasks, each with a two-layer and a three-layer variant, so ten variants in all.</p>
+  <figure>
+    <div class="colhead" aria-hidden="true"><span>Transfer</span><span>Cross transfer</span><span>Vertical stacking</span><span>Push-down</span><span>Insertion</span></div>
+    <div class="card"><img src="assets/img/tasks.jpg" width="2424" height="726" alt="Start (top row) and end (bottom row) of the five three-layer tasks from the front camera: a tower moved between pads, centre blocks moved across, a column stacked, a full tower pushed apart, and blocks inserted into a tower." loading="lazy"></div>
+    <figcaption>The five three-layer tasks, start (top) and end (bottom), from one fixed camera. Frames from the
+      organizers' public demonstrations (TOWER-SimData, CC BY 4.0), cropped and arranged by us.</figcaption>
+  </figure>
+  <div class="tablewrap">
+    <table class="tasks">
+      <thead><tr><th>Task</th><th class="l">What has to happen</th><th>Operations (2 / 3 layers)</th><th class="l">Arms</th><th>Demo length (2 / 3 layers)</th></tr></thead>
+      <tbody class="num">
+        <tr><td>1 Tower transfer</td><td class="l">Move the side blocks of a tower, two per layer and top layer first, onto the other pad</td><td>4 / 6</td><td class="l">alternate by layer</td><td>115–119 s / 177–181 s</td></tr>
+        <tr><td>2 Cross transfer</td><td class="l">Move the centre block of each layer, top first, and rebuild the cross-shaped tower on the other pad</td><td>2 / 3</td><td class="l">alternate by layer</td><td>59–62 s / 92–95 s</td></tr>
+        <tr><td>3 Vertical stacking</td><td class="l">Stack single blocks on the other pad with their centres vertically aligned</td><td>2 / 3</td><td class="l">back arm only</td><td>58–61 s / 83–91 s</td></tr>
+        <tr><td>4 Push-down</td><td class="l">Push every block off a full tower (three per layer), top layer first, in a fixed order</td><td>6 / 9</td><td class="l">alternate by layer</td><td>116–122 s / 171–176 s</td></tr>
+        <tr><td>5 Insertion</td><td class="l">Insert blocks into the empty centre slots of a tower, highest first, with about 1 mm of clearance per side</td><td>1 / 2</td><td class="l">left; back, then left</td><td>58–60 s / 160–161 s</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="caption">Operations are grasp-and-place transfers (Tasks 1–3, 5) or pushes (Task 4). Demo lengths are
+    the range over the organizers' demonstrations: 50–56 per variant, 531 in all, recorded at 30 Hz.</p>
+
+  <h3>What the policy sees and does</h3>
+  <p>The policy runs as a server. At each call it receives the four camera images (640 × 480), the 14 joint angles,
+    the two gripper widths, the simulated time and the task name, and it returns a chunk of up to 16 rows of joint
+    targets. Each row holds 7 joint angles and a gripper width per arm and is applied for 0.1 s, so the robot runs
+    at 10 Hz and an episode of 210 s has up to 2,100 rows. The simulation pauses while the policy thinks.</p>
+  $$o_t=\big(I^{(1)}_t,\dots,I^{(4)}_t,\;q_t\in\mathbb{R}^{2\times 7},\;w_t\in\mathbb{R}^{2},\;t\big),\qquad
+    A_t\in\mathbb{R}^{H\times 16},\quad 1\le H\le 16 .$$
+  <p>The policy is never told block poses, depth, velocities, forces, masses, friction or which robustness case it is
+    in. Each variant is evaluated on ten episodes: one nominal and nine drawn from the robustness cases below, on
+    fixed layouts that participants do not see.</p>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Robustness case</th><th class="l">Range</th></tr></thead>
+      <tbody class="num">
+        <tr><td>Light, heavy, uneven</td><td class="l">block mass × 0.4–0.7, × 1.4–2.0, or × 0.4–2.0 per block</td></tr>
+        <tr><td>Slippery, high friction</td><td class="l">static friction 0.15–0.30 or 0.9–1.3 (dynamic 0.07–0.14 or 0.5–0.8)</td></tr>
+        <tr><td>Shifted assembly</td><td class="l">whole tower moved up to 15 mm per axis and turned up to 10°</td></tr>
+        <tr><td>Irregular layers</td><td class="l">each layer moved up to 8 mm and turned up to 5°</td></tr>
+        <tr><td>Lighting</td><td class="l">intensity × 0.25–2.0, colour 3000–8500 K, direction ±60°</td></tr>
+        <tr><td>Combined</td><td class="l">mass × 0.5–1.8 per block, mixed friction, shift up to 10 mm / 8°, light × 0.4–1.6</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Scoring works at three levels: task success (every block where it belongs, nothing else disturbed), operation
+    success (grasps and places, or pushes), and long-horizon progress, the share of the task's steps completed in
+    order. A disturbance rate counts non-target blocks that were moved. Tasks are weighted 1 : 1 : 1 : 3 : 3, so
+    push-down and insertion carry two thirds of the total.</p>
+</section>
+
+<section id="hard">
+  <h2>2. Why long-horizon bimanual manipulation is hard</h2>
+  <ul>
+    <li><b>Long horizons.</b> Up to nine operations and 2,100 control steps per episode. A block nudged in minute one
+      is scored at the end, and the final arrangement is all that counts.</li>
+    <li><b>Millimetre tolerances.</b> A place must land within 5 mm and 5° of its goal. Insertion leaves about 1 mm of
+      clearance on each side. At the fixed cameras one pixel covers about 1.5 mm.</li>
+    <li><b>Contact.</b> Pushing a block out of a full tower without dragging its neighbours along, with friction
+      anywhere from 0.15 to 1.3 and masses that differ by a factor of five.</li>
+    <li><b>Two arms, one workspace.</b> The arms take turns around the same towers and must stay out of each other's
+      way.</li>
+    <li><b>Soft, position-controlled arms.</b> The joints are driven by stiff-but-not-rigid position servos. At rest,
+      gravity alone pulls the back arm's gripper 2–4 cm below its target, and the task descriptions for Tasks 4–5
+      limit the finger force to 3 N, so heavy blocks can slip.</li>
+    <li><b>Partial observability.</b> No block poses, only images. Blocks inside a tower are hidden, the arms cover the
+      blocks they work on, and a pushed block leaves the views as it tips over the table edge.</li>
+    <li><b>Open-loop chunks.</b> Up to 16 rows, 1.6 s, can pass between two observations.</li>
+  </ul>
+</section>
+
+<section id="imitation">
+  <h2>3. Why not imitation learning alone</h2>
+  <p>The challenge ships demonstrations, and the obvious approach is to clone them. We decided against making that the
+    core of the system. This is our reasoning, not an experiment we ran:</p>
+  <ul>
+    <li><b>The demonstrations show one way to succeed, not how to recover.</b> Every demonstration of a variant follows
+      the same plan (the same block order and the same arm for each step), every one succeeds, and in the episodes we
+      inspected the towers vary by only a few millimetres. The evaluation moves towers by up to 15 mm and changes mass
+      and friction several-fold. A cloned policy that drifts off the demonstrated states has no data on how to get
+      back.</li>
+    <li><b>Errors compound over long horizons.</b> Without interaction, the cost of behaviour cloning can grow with the
+      square of the horizon, because each mistake leads to states the expert never visited
+      (<a href="#ref-dagger">Ross et al., 2011</a>). Here the horizon is up to 2,100 steps.</li>
+    <li><b>The control rate does not match.</b> The demonstrations are recorded at 30 Hz with smooth commands. The
+      evaluator holds each 10 Hz row for 0.1 s. When we replayed the recorded commands that way in our simulator, the
+      soft arms swung enough to drop blocks.</li>
+    <li><b>No time to spare.</b> The demonstrations already take up to 181 s of the 210 s budget, leaving no room for a
+      retry at the demonstrated pace.</li>
+  </ul>
+  <p>Imitation itself is not the problem; imitating a fixed set of demonstrations is. Our student is also trained by
+    imitation, but of a teacher we can query in any state, including states we create by injecting failures. So we
+    split the work: take the plan and the geometry from the demonstrations, learn the contact skills with
+    reinforcement learning, and learn the decisions by interactive imitation of our own teacher.</p>
+  <div class="split">
+    <div>
+      <h4><span class="chip demo">Taken from the demonstrations</span></h4>
+      <ul>
+        <li>Task plans: block order and the arm for each operation</li>
+        <li>Tower layouts and block rest heights; pad and foundation poses</li>
+        <li>Grasp and push geometry: where to hold a block, approach tilt, via-point heights</li>
+        <li>Arm postures used as priors for inverse kinematics</li>
+        <li>The arms' drive gains, read back from the recordings</li>
+        <li>Camera calibration (projected block edges within 0.25 px of the images)</li>
+        <li>3,520 labelled camera frames from the organizers' renderer (2,800 for training, 720 held out)</li>
+      </ul>
+    </div>
+    <div>
+      <h4><span class="chip learned">Learned with reinforcement learning</span></h4>
+      <ul>
+        <li>Grasp and lift, per arm</li>
+        <li>Place and release, per arm</li>
+        <li>Push a block off the tower, per arm</li>
+        <li>Reaching between skills (after the deadline, student v1.5)</li>
+      </ul>
+      <h4><span class="chip learned">Learned by supervised and interactive imitation</span></h4>
+      <ul>
+        <li>The keypoint network for block poses</li>
+        <li>The high-level policy that picks the next subtask</li>
+        <li>The insertion skills (from planned controllers)</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="method">
+  <h2>4. An agentic robot system</h2>
+  <p>By <em>agentic</em> we mean a system that works the way a software agent uses tools: it breaks the goal into
+    steps, calls a specialized skill for each step, checks the result, and decides what to do next. The skills are the
+    tools; some are learned with reinforcement learning and some are planned. In the teacher the decisions come from a
+    task graph and an executor; in the student they come from a learned high-level policy. We think this structure
+    fits long-horizon manipulation for five reasons:</p>
+  <ul>
+    <li><b>Short problems for reinforcement learning.</b> Each skill is trained in episodes of 8–15 s (80–150 steps)
+      with a dense reward, instead of 2,100 steps with a final score.</li>
+    <li><b>Progress can be checked.</b> Every skill ends with a success check: is the block lifted 6 cm and held, is it
+      within 5 mm and 5° of its goal, did it leave the tower without moving the others? A failed check triggers a
+      retry instead of silently corrupting the rest of the episode.</li>
+    <li><b>Reuse.</b> One grasp policy per arm serves every transfer variant; one push policy per arm serves both
+      push-down variants.</li>
+    <li><b>Mix and upgrade.</b> Plan where planning is precise (free-space motion, the last millimetre of an insertion)
+      and learn where contact is uncertain (grasping, placing, pushing). Components can be replaced one at a time.</li>
+    <li><b>The structure survives distillation.</b> The student keeps the same skill calls and changes only where the
+      state and the decisions come from.</li>
+  </ul>
+  <p>In the language of hierarchical reinforcement learning, the high-level policy \(\mu\) picks an option
+    (<a href="#ref-options">Sutton et al., 1999</a>), a subtask with a goal block and an arm, from the estimated state
+    \(\hat s_t\) and a memory \(m_t\) of earlier subtasks and their outcomes, and the option's skill produces the
+    actions until its success check ends it:</p>
+  $$\omega_k=(\text{subtask},\ \text{goal},\ \text{arm})\sim\mu(\cdot\mid \hat s_t,\,m_t),\qquad
+    a_t\sim\pi_{\omega_k}(\cdot\mid \hat s_t).$$
+
+  <h3 id="sim">4.1 Recreating the evaluator</h3>
+  <p>The evaluator itself is not public, so we rebuilt it in Isaac Lab (<a href="#ref-isaaclab">Mittal et al.,
+    2023</a>) from the official station and block assets. Every number that matters was matched to the organizers'
+    data:</p>
+  <ul>
+    <li><b>Physics.</b> PhysX on the CPU, as in the evaluator, at 120 Hz. Each 10 Hz row is held for 12 physics steps
+      with a one-step command delay. Replaying ten demonstrations on the CPU ends with every block within 0.89 mm of the
+      recording. On the GPU solver the blocks creep 8–19 mm, so we train on the GPU but accept results only on the
+      CPU.</li>
+    <li><b>Robot.</b> The joint stiffness, damping and friction of both arms were read back from the recordings. Our
+      arm controller compensates gravity sag analytically; the model torques match PhysX within 0.1–2 % per joint.</li>
+    <li><b>Cameras.</b> Calibrated against the dataset images; projected block edges fall within 0.25 px.</li>
+    <li><b>Randomization.</b> The ten robustness cases, plus wider ranges for training: mass × 0.35–2.2 per block,
+      static friction 0.13–1.4, and random finger friction.</li>
+    <li><b>Scoring.</b> Our own reconstruction of the grasp, place, push and success checks and of the metrics.</li>
+  </ul>
+</section>
+
+<section id="teacher">
+  <h2>5. The teacher</h2>
+  <p>The teacher is privileged: it reads the exact pose of every block from the simulator, including hidden ones. Its
+    decisions come from a <b>task graph</b> per variant and a deterministic <b>executor</b>; the contact skills are PPO
+    policies.</p>
+  <figure>
+    <div class="diagram" role="img" aria-label="Teacher architecture: a task graph from the demonstrations and the exact simulator state feed an executor, which calls one skill at a time. Learned PPO skills: grasp and lift, place and release, push. Planned skills: transit, park, and the Task 5 grasp, insert and push-in. Skills drive an arm controller that sends joint targets to the physics.">
+<!-- BEGIN diagram:teacher -->
+<svg viewBox="0 0 940 470" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+<style>
+.d-box{stroke-width:1.6}
+.d-learned{fill:var(--teal-bg);stroke:var(--teal)}
+.d-planned{fill:var(--amber-bg);stroke:var(--amber)}
+.d-demo{fill:var(--blue-bg);stroke:var(--blue)}
+.d-priv{fill:var(--grey-bg);stroke:var(--grey);stroke-dasharray:6 4}
+.d-neutral{fill:var(--surface);stroke:var(--rule-strong)}
+.d-group{fill:none;stroke:var(--rule-strong);stroke-dasharray:3 4}
+.d-t{fill:var(--ink);font-size:15.5px;font-weight:650}
+.d-s{fill:var(--muted);font-size:13.5px}
+.d-l{fill:var(--muted);font-size:12.5px;font-style:italic}
+.d-g{fill:var(--muted);font-size:12.5px;font-weight:650;letter-spacing:.04em;text-transform:uppercase}
+.d-a{fill:none;stroke:var(--muted);stroke-width:1.5}
+.d-a.dash{stroke-dasharray:5 4}
+.d-head{fill:var(--muted)}
+</style>
+<defs><marker id="ah-teacher" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="d-head" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+<rect class="d-box d-demo" x="20" y="20" width="220" height="120" rx="9"/>
+<text class="d-t" x="130.0" y="58.0" text-anchor="middle">Task graph</text>
+<text class="d-s" x="130.0" y="76.0" text-anchor="middle">one per task variant, from</text>
+<text class="d-s" x="130.0" y="93.0" text-anchor="middle">the demonstrations: block</text>
+<text class="d-s" x="130.0" y="110.0" text-anchor="middle">order, arm per step, goals</text>
+<rect class="d-box d-priv" x="20" y="200" width="220" height="96" rx="9"/>
+<text class="d-t" x="130.0" y="234.5" text-anchor="middle">Simulator state</text>
+<text class="d-s" x="130.0" y="252.5" text-anchor="middle">exact pose of every block,</text>
+<text class="d-s" x="130.0" y="269.5" text-anchor="middle">joint angles, gripper widths</text>
+<rect class="d-box d-planned" x="290" y="50" width="230" height="210" rx="9"/>
+<text class="d-t" x="405.0" y="107.5" text-anchor="middle">Executor</text>
+<text class="d-s" x="405.0" y="125.5" text-anchor="middle">runs one skill call at a time</text>
+<text class="d-s" x="405.0" y="142.5" text-anchor="middle">and checks its outcome:</text>
+<text class="d-s" x="405.0" y="159.5" text-anchor="middle">lifted and held? placed within</text>
+<text class="d-s" x="405.0" y="176.5" text-anchor="middle">5 mm and 5°? pushed clear with</text>
+<text class="d-s" x="405.0" y="193.5" text-anchor="middle">the tower intact? On failure:</text>
+<text class="d-s" x="405.0" y="210.5" text-anchor="middle">retry, skip, other arm, park</text>
+<rect class="d-group" x="600" y="12" width="320" height="336" rx="12"/>
+<text class="d-g" x="612" y="32">Skills</text>
+<rect class="d-box d-learned" x="614" y="42" width="292" height="44" rx="8"/>
+<text class="d-t" x="760.0" y="59.0" text-anchor="middle">Grasp and lift</text>
+<text class="d-s" x="760.0" y="77.0" text-anchor="middle">PPO, one policy per arm</text>
+<rect class="d-box d-learned" x="614" y="90" width="292" height="44" rx="8"/>
+<text class="d-t" x="760.0" y="107.0" text-anchor="middle">Place and release</text>
+<text class="d-s" x="760.0" y="125.0" text-anchor="middle">PPO, one policy per arm</text>
+<rect class="d-box d-learned" x="614" y="138" width="292" height="44" rx="8"/>
+<text class="d-t" x="760.0" y="155.0" text-anchor="middle">Push (Task 4)</text>
+<text class="d-s" x="760.0" y="173.0" text-anchor="middle">PPO, one policy per arm</text>
+<rect class="d-box d-planned" x="614" y="196" width="292" height="44" rx="8"/>
+<text class="d-t" x="760.0" y="213.0" text-anchor="middle">Transit</text>
+<text class="d-s" x="760.0" y="231.0" text-anchor="middle">IK path, quintic timing</text>
+<rect class="d-box d-planned" x="614" y="244" width="292" height="44" rx="8"/>
+<text class="d-t" x="760.0" y="261.0" text-anchor="middle">Park</text>
+<text class="d-s" x="760.0" y="279.0" text-anchor="middle">joint-space move home</text>
+<rect class="d-box d-planned" x="614" y="292" width="292" height="44" rx="8"/>
+<text class="d-t" x="760.0" y="309.0" text-anchor="middle">Task 5 grasp, insert, push-in</text>
+<text class="d-s" x="760.0" y="327.0" text-anchor="middle">closed-loop controllers</text>
+<rect class="d-box d-planned" x="290" y="362" width="230" height="72" rx="9"/>
+<text class="d-t" x="405.0" y="384.5" text-anchor="middle">Arm controller</text>
+<text class="d-s" x="405.0" y="402.5" text-anchor="middle">damped least-squares IK,</text>
+<text class="d-s" x="405.0" y="419.5" text-anchor="middle">gravity-sag compensation</text>
+<rect class="d-box d-neutral" x="600" y="362" width="320" height="72" rx="9"/>
+<text class="d-t" x="760.0" y="384.5" text-anchor="middle">Physics (PhysX, CPU, 120 Hz)</text>
+<text class="d-s" x="760.0" y="402.5" text-anchor="middle">each 10 Hz row is held for</text>
+<text class="d-s" x="760.0" y="419.5" text-anchor="middle">12 physics steps</text>
+<path class="d-a" d="M240,80 L288,110" marker-end="url(#ah-teacher)"/>
+<path class="d-a" d="M240,248 L288,210" marker-end="url(#ah-teacher)"/>
+<path class="d-a" d="M520,120 L598,120" marker-end="url(#ah-teacher)"/>
+<text class="d-l" x="559" y="110" text-anchor="middle">skill call</text>
+<path class="d-a" d="M600,200 L522,200" marker-end="url(#ah-teacher)"/>
+<text class="d-l" x="561" y="192" text-anchor="middle">outcome</text>
+<path class="d-a" d="M600,318 L405,318 L405,360" marker-end="url(#ah-teacher)"/>
+<text class="d-l" x="500" y="310" text-anchor="middle">pose change or joint targets</text>
+<path class="d-a" d="M520,398 L598,398" marker-end="url(#ah-teacher)"/>
+<text class="d-l" x="559" y="390" text-anchor="middle">1–16 rows</text>
+<path class="d-a" d="M760,434 L760,456 L130,456 L130,298" marker-end="url(#ah-teacher)"/>
+<text class="d-l" x="445" y="452" text-anchor="middle">next state</text>
+</svg>
+<!-- END diagram:teacher -->
+    </div>
+    <div class="legend"><span><i class="sw learned"></i>learned (PPO)</span><span><i class="sw planned"></i>planned or analytic</span><span><i class="sw demo"></i>from the demonstrations</span><span><i class="sw priv"></i>privileged (simulator only)</span></div>
+    <figcaption>The teacher. The executor calls one skill at a time, reads its outcome and moves on, retries, skips or
+      switches arms. Transits send up to 16 rows per call; contact skills send one row per call and see the result
+      before the next.</figcaption>
+  </figure>
+
+  <h3>5.1 Task graphs and the executor</h3>
+  <p>A task graph is a list of skill calls built from the demonstrations' plan. A transfer is four calls per block
+    (move to the pre-grasp pose, grasp and lift, carry to the pre-place pose, place and release), a push-down two per
+    block (move behind the block, push), an insertion six per block (approach, grasp, carry to the slot, insert,
+    move behind the block, push it home). The idle arm is parked whenever the working arm changes. The graphs have
+    7–27 calls.</p>
+<pre><code>{"id": "t0_grasp", "skill": "grasp_lift", "arm": "back", "block": "source_l2_a", "lift_m": 0.06, "timeout_s": 15.0}
+{"id": "t0_place", "skill": "place_release", "arm": "back", "tol_pos_m": 0.005, "tol_yaw_deg": 5.0, "settle_s": 1.0}</code></pre>
+  <p class="caption">Two calls from the Task 1-2 graph (some fields left out).</p>
+  <p>The executor runs at 10 Hz. Each call it builds the current skill from the state, steps it, and judges its
+    outcome when it ends: lifted and held, placed within tolerance, pushed clear with the rest of the tower within
+    10 mm, inserted to depth. On a failure it retries (up to three attempts per block: re-grasp, re-place, or
+    re-carry if the block is still held), skips the block, or, once per block, hands a place that missed by up to
+    15 mm to the other arm when its own arm cannot reach the block again. Before every move it parks the other arm if it is within 18 cm of the target.</p>
+  <div class="callout">
+    <b>How the task graphs were written.</b> The task graphs, the executor and the recovery rules were written offline
+    with an LLM coding agent (Claude Code), which also wrote the project's code under our direction. The graphs were refined in a
+    loop: rehearse every variant in the recreated evaluator, write a report of failure patterns, make at most five
+    bounded edits to the graph files, and keep an edit only if it beats the previous version on the same random seeds.
+    Two of the three edits in that loop were kept: a slower carry speed for held blocks (0.12 → 0.08 m/s) and shifting
+    the place goal by half of the measured in-hand offset. No language model runs during training, data collection or
+    evaluation; running or retraining the system does not need one.
+  </div>
+
+  <h3>5.2 Learned contact skills</h3>
+  <p>Grasp-and-lift, place-and-release and push are trained with PPO
+    (<a href="#ref-ppo">Schulman et al., 2017</a>), one policy per skill and arm, in light GPU scenes with one arm and
+    up to 15 blocks, 3,072–4,096 environments in parallel. The setup is an <b>asymmetric actor-critic</b>
+    (<a href="#ref-asym">Pinto et al., 2018</a>). The actor sees only what a camera-based system could estimate: noisy
+    block poses (a per-episode bias of 2–3 mm and 2–3°, per-step jitter, occasional dropouts and 1 cm outliers) and the
+    arm's own state. The critic additionally sees the true poses, block mass and friction, finger contact forces and
+    joint velocities. Because the actors never relied on privileged inputs, the student reuses them unchanged.</p>
+  <p>We use the clipped PPO objective with generalized advantage estimation (<a href="#ref-gae">Schulman et al.,
+    2016</a>), implemented in rsl_rl (<a href="#ref-rslrl">Rudin et al., 2022</a>):</p>
+  $$\mathcal{L}^{\text{clip}}(\theta)=\mathbb{E}_t\Big[\min\big(\rho_t(\theta)\,\hat A_t,\;
+    \operatorname{clip}\big(\rho_t(\theta),1-\epsilon,1+\epsilon\big)\,\hat A_t\big)\Big],\qquad
+    \rho_t(\theta)=\frac{\pi_\theta(a_t\mid o_t)}{\pi_{\theta_{\text{old}}}(a_t\mid o_t)},$$
+  $$\hat A_t=\sum_{l\ge 0}(\gamma\lambda)^l\,\delta_{t+l},\qquad
+    \delta_t=r_t+\gamma\,V_\phi(s_{t+1})-V_\phi(s_t),$$
+  $$\mathcal{L}(\theta,\phi)=-\mathcal{L}^{\text{clip}}(\theta)
+    +c_v\,\mathbb{E}_t\big[(V_\phi(s_t)-\hat R_t)^2\big]
+    -c_e\,\mathbb{E}_t\big[\mathcal{H}[\pi_\theta(\cdot\mid o_t)]\big].$$
+  <p class="eq-note">The actor \(\pi_\theta\) reads the actor observation \(o_t\) (65–73 inputs); the critic
+    \(V_\phi\) reads the privileged state \(s_t\) (141–161 inputs). \(\epsilon=0.2\), \(\gamma=0.99\),
+    \(\lambda=0.95\), \(c_v=1\) (with a clipped value loss), \(c_e=0.006\); the learning rate adapts to keep the KL
+    divergence between updates near 0.016. Networks: actor 256-256-128, critic 512-256-128, ELU.</p>
+
+  <h4>From actions to joint targets</h4>
+  <p>A skill's action is a small change of the gripper's target pose in the arm's base frame, plus a gripper command
+    for grasp and place. It is smoothed and scaled with the distance to the goal (fine steps near the block, larger
+    ones far away), then turned into joint targets by damped least-squares inverse kinematics with a posture prior,
+    and finally corrected for gravity sag:</p>
+  $$\bar a_t=0.3\,a_t+0.7\,\bar a_{t-1},\qquad \Delta p=s(d)\,\bar a_{1:3},\qquad \Delta\vartheta=\vartheta_{\max}\,\bar a_{4:6},$$
+  $$\Delta q=J^{\top}\big(JJ^{\top}+\lambda^2 I\big)^{-1}e+\big(I-J^{+}J\big)\,k\,(q_{\text{prior}}-q),\qquad
+    q_{\text{cmd}}=q_{\text{des}}-K_p^{-1}\,\tau_g(q_{\text{des}}).$$
+  <p class="eq-note">\(s(d)\) grows from 5 to 20 mm (grasp), 4 to 15 mm (place) or 12 to 15 mm (push) per step as the
+    distance \(d\) to the goal grows; \(\lambda=0.02\); four iterations per step, at most 0.15 rad per joint per step;
+    \(\tau_g\) is the gravity torque of the arm (and of a nominal block when holding one), \(K_p\) the joint
+    stiffness.</p>
+
+  <h4>Rewards</h4>
+  <p>The push skill shows the pattern every skill follows: shaping toward the right contact, progress, penalties for
+    disturbing anything else, and a large bonus for finishing early.</p>
+  $$\begin{aligned}
+  r_t ={}& 0.5\,r^{\text{align}}_t + 150\,(x_t-x_{t-1})
+    - \frac{\max(0,\,|y_t|-5\,\text{mm})}{1\,\text{cm}}
+    - 0.2\max\big(0,\,|\Delta\psi_t|-2^\circ\big)\\
+  & - 0.5\sum_{j\neq\text{target}}\frac{\max(0,\,d_j-2\,\text{mm})}{1\,\text{cm}}
+    - 0.01\,\|a_t-a_{t-1}\|^2 - 0.1\,r^{\text{limits}}_t\\
+  & + \mathbf{1}[\text{success}]\,(20+T-t) - 2\,\mathbf{1}[\text{failure}]
+  \end{aligned}$$
+  <p class="eq-note">\(x_t\) is the block's travel along the push direction, clipped to [−0.05, 0.16] m, so the
+    progress term is potential-based; \(y_t\) its sideways travel, \(\Delta\psi_t\) its yaw change in degrees,
+    \(d_j\) the displacement of every other block. \(r^{\text{align}}\) rewards the fingertips for reaching the contact
+    pose 86.5 mm behind the block; \(r^{\text{limits}}\) penalizes joints within 0.1 rad of their limits. Success: the
+    block has left the tower (0.16 m from its axis, or 0.09 m and on the table) while no other block moved more than
+    10 mm, tilted more than 30° or dropped more than 15 mm. Failure: the tower broke, or the block was shoved more
+    than 4 cm sideways. Episodes last 8 s.</p>
+  <details>
+    <summary>The grasp-and-lift reward</summary>
+    $$\begin{aligned}
+    r_t ={}& \varphi(k_t) + \mathbf{1}[\text{both pads touch}] + 2\,\mathbf{1}[\text{grasped}]
+      + 0.5\,\mathbf{1}[\text{closing},\,k_t<1\,\text{cm}]
+      + 3\min\!\big(h_t/8\,\text{cm},\,1\big)\,\mathbf{1}[\text{grasped}]\\
+    & - \sum_{j\neq\text{target}}\frac{\max(0,\,d_j-3\,\text{mm})}{1\,\text{cm}} - 0.01\,\|a_t-a_{t-1}\|^2 - 0.1\,r^{\text{limits}}_t\\
+    & + \mathbf{1}[\text{success}]\,\big(20+8\,(T-t)\big) - 10\,\mathbf{1}[\text{disturbed}] - 5\,\mathbf{1}[\text{dropped}] - 5\,\mathbf{1}[\text{bad grasp}],
+    \end{aligned}$$
+    $$\varphi(k)=\frac{1}{e^{50k}+2+e^{-50k}}+\frac{1}{e^{100k}+e^{-100k}} .$$
+    <p class="eq-note">\(k_t\) is the mean distance between four keypoints on the gripper and the same keypoints at the
+      ideal grasp, \(h_t\) the lift height. Success: lifted 8 cm and held for five steps with the grasp within 10 mm
+      along the block, 5 mm vertically and 6° of the ideal; otherwise the episode ends as a bad grasp. Episodes last
+      15 s and start from a mix of poses: around the pre-grasp, halfway down, or already straddling the block.</p>
+  </details>
+
+  <h4>Training and results</h4>
+  <p>Each policy trains for a few hundred to about a thousand PPO iterations at about 12,000 environment steps per
+    second; the left grasp policy took about 850 iterations, 84 million steps and 2.1 hours. Measured on 500 episodes
+    per setting on the GPU:</p>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Skill</th><th>Left, nominal</th><th>Left, robustness cases</th><th>Back, nominal</th><th>Back, robustness cases</th></tr></thead>
+      <tbody class="num">
+        <tr><td>Grasp and lift</td><td>100 %</td><td>98.8 %</td><td>99.2 %</td><td>100 %</td></tr>
+        <tr><td>Place and release, exact poses</td><td>99.6 %</td><td>99.0 %</td><td>99.8 %</td><td>100 %</td></tr>
+        <tr><td>Place and release, noisy poses</td><td>92.6 %</td><td>92.2 %</td><td>87.2 %</td><td>84.8 %</td></tr>
+        <tr><td>Push</td><td>98.4 %</td><td>96.6 %</td><td>99.6 %</td><td>94.6 %</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Independent 2 mm biases on the block and the goal limit any place to about 90 % at a 5 mm tolerance, which is why
+    the noisy-pose numbers are lower.</p>
+
+  <h3>5.3 Planned skills</h3>
+  <ul>
+    <li><b>Transit</b> moves an arm between skills: rise 2 cm above the higher of start and goal, travel straight,
+      descend, with quintic timing (0.25 m/s empty, 0.08 m/s carrying a block, which stopped heavy blocks from shaking
+      loose).</li>
+    <li><b>Park</b> moves an arm home in joint space.</li>
+    <li><b>Task 5 grasp, insert and push-in</b> are closed-loop controllers. The insert re-aims every step from the
+      observed block and advances 1 mm per step only while it is aligned within 0.8 mm and 0.4°. We also trained a
+      PPO insertion policy: 27 % success on the GPU but 0 of 32 on the CPU, because contact at 1–2 mm clearances
+      differs between the two solvers. The planned controller is reliable on the CPU.</li>
+  </ul>
+  <p>With exact poses, the teacher completes 1,186 of 1,200 episodes on Tasks 1–3 and 446 of 480 across all ten
+    variants (nominal and robustness cases, CPU physics).</p>
+</section>
+
+<section id="student">
+  <h2>6. The student</h2>
+  <p>The student is what the evaluator talks to. It sees only the official observation. It keeps the teacher's
+    structure and executor code but replaces three things: the exact state (by perception), the task-graph pointer
+    (by a learned high-level policy) and the planned insertion controllers (by distilled networks). The task plan, the
+    list of goals and the arm prescribed for each, still comes from the public demonstrations; nothing is taken from
+    the evaluation layouts.</p>
+  <figure>
+    <div class="diagram" role="img" aria-label="Student architecture: the official observation goes to a keypoint network and a multi-view pose fit with a tracker, which produce an estimated state. A learned high-level policy, given the task plan from the demonstrations, picks a subtask, goal block and arm; the option executor expands it into skill calls. Skills: PPO grasp and place from the teacher, PPO push fine-tuned under perception errors, Task 5 skills distilled by behaviour cloning, and planned transits. An arm controller produces the action chunk.">
+<!-- BEGIN diagram:student -->
+<svg viewBox="0 0 940 560" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+<style>
+.d-box{stroke-width:1.6}
+.d-learned{fill:var(--teal-bg);stroke:var(--teal)}
+.d-planned{fill:var(--amber-bg);stroke:var(--amber)}
+.d-demo{fill:var(--blue-bg);stroke:var(--blue)}
+.d-priv{fill:var(--grey-bg);stroke:var(--grey);stroke-dasharray:6 4}
+.d-neutral{fill:var(--surface);stroke:var(--rule-strong)}
+.d-group{fill:none;stroke:var(--rule-strong);stroke-dasharray:3 4}
+.d-t{fill:var(--ink);font-size:15.5px;font-weight:650}
+.d-s{fill:var(--muted);font-size:13.5px}
+.d-l{fill:var(--muted);font-size:12.5px;font-style:italic}
+.d-g{fill:var(--muted);font-size:12.5px;font-weight:650;letter-spacing:.04em;text-transform:uppercase}
+.d-a{fill:none;stroke:var(--muted);stroke-width:1.5}
+.d-a.dash{stroke-dasharray:5 4}
+.d-head{fill:var(--muted)}
+</style>
+<defs><marker id="ah-student" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="d-head" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+<rect class="d-box d-neutral" x="20" y="20" width="200" height="110" rx="9"/>
+<text class="d-t" x="120.0" y="53.0" text-anchor="middle">Official observation</text>
+<text class="d-s" x="120.0" y="71.0" text-anchor="middle">4 RGB cameras, 640 × 480,</text>
+<text class="d-s" x="120.0" y="88.0" text-anchor="middle">joint angles, gripper</text>
+<text class="d-s" x="120.0" y="105.0" text-anchor="middle">widths, time</text>
+<rect class="d-box d-learned" x="260" y="20" width="200" height="110" rx="9"/>
+<text class="d-t" x="360.0" y="53.0" text-anchor="middle">Keypoint network</text>
+<text class="d-s" x="360.0" y="71.0" text-anchor="middle">ResNet-34 U-Net: corners,</text>
+<text class="d-s" x="360.0" y="88.0" text-anchor="middle">edges, block surface,</text>
+<text class="d-s" x="360.0" y="105.0" text-anchor="middle">arm-covered surface</text>
+<rect class="d-box d-planned" x="500" y="20" width="200" height="110" rx="9"/>
+<text class="d-t" x="600.0" y="53.0" text-anchor="middle">Multi-view pose fit</text>
+<text class="d-s" x="600.0" y="71.0" text-anchor="middle">and tracker: all 4 cameras,</text>
+<text class="d-s" x="600.0" y="88.0" text-anchor="middle">robust Gauss-Newton,</text>
+<text class="d-s" x="600.0" y="105.0" text-anchor="middle">pose + confidence</text>
+<rect class="d-box d-neutral" x="740" y="20" width="180" height="110" rx="9"/>
+<text class="d-t" x="830.0" y="53.0" text-anchor="middle">Estimated state</text>
+<text class="d-s" x="830.0" y="71.0" text-anchor="middle">block poses, arm state,</text>
+<text class="d-s" x="830.0" y="88.0" text-anchor="middle">memory of subtasks</text>
+<text class="d-s" x="830.0" y="105.0" text-anchor="middle">and their outcomes</text>
+<path class="d-a" d="M220,75 L258,75" marker-end="url(#ah-student)"/>
+<path class="d-a" d="M460,75 L498,75" marker-end="url(#ah-student)"/>
+<path class="d-a" d="M700,75 L738,75" marker-end="url(#ah-student)"/>
+<rect class="d-box d-demo" x="20" y="196" width="200" height="96" rx="9"/>
+<text class="d-t" x="120.0" y="230.5" text-anchor="middle">Task plan</text>
+<text class="d-s" x="120.0" y="248.5" text-anchor="middle">goals and prescribed arms,</text>
+<text class="d-s" x="120.0" y="265.5" text-anchor="middle">from the demonstrations</text>
+<rect class="d-box d-learned" x="260" y="180" width="220" height="128" rx="9"/>
+<text class="d-t" x="370.0" y="213.5" text-anchor="middle">High-level policy</text>
+<text class="d-s" x="370.0" y="231.5" text-anchor="middle">transformer over block, goal</text>
+<text class="d-s" x="370.0" y="248.5" text-anchor="middle">and arm tokens; picks the</text>
+<text class="d-s" x="370.0" y="265.5" text-anchor="middle">subtask, goal block and arm</text>
+<text class="d-s" x="370.0" y="282.5" text-anchor="middle">(BC + DAgger)</text>
+<rect class="d-box d-planned" x="520" y="180" width="200" height="128" rx="9"/>
+<text class="d-t" x="620.0" y="213.5" text-anchor="middle">Option executor</text>
+<text class="d-s" x="620.0" y="231.5" text-anchor="middle">expands the subtask into</text>
+<text class="d-s" x="620.0" y="248.5" text-anchor="middle">skill calls and checks</text>
+<text class="d-s" x="620.0" y="265.5" text-anchor="middle">each outcome (the</text>
+<text class="d-s" x="620.0" y="282.5" text-anchor="middle">teacher&#x27;s executor code)</text>
+<path class="d-a" d="M830,130 L830,156 L370,156 L370,178" marker-end="url(#ah-student)"/>
+<path class="d-a" d="M220,244 L258,244" marker-end="url(#ah-student)"/>
+<path class="d-a" d="M480,244 L518,244" marker-end="url(#ah-student)"/>
+<text class="d-l" x="499" y="236" text-anchor="middle">option</text>
+<path class="d-a dash" d="M650,178 L650,132" marker-end="url(#ah-student)"/>
+<text class="d-l" x="642" y="148" text-anchor="end">block to track</text>
+<rect class="d-group" x="12" y="336" width="916" height="116" rx="12"/>
+<text class="d-g" x="24" y="356">Skills</text>
+<rect class="d-box d-learned" x="26" y="366" width="200" height="70" rx="9"/>
+<text class="d-t" x="126.0" y="387.5" text-anchor="middle">Grasp, place</text>
+<text class="d-s" x="126.0" y="405.5" text-anchor="middle">PPO, the teacher&#x27;s</text>
+<text class="d-s" x="126.0" y="422.5" text-anchor="middle">policies unchanged</text>
+<rect class="d-box d-learned" x="240" y="366" width="200" height="70" rx="9"/>
+<text class="d-t" x="340.0" y="387.5" text-anchor="middle">Push</text>
+<text class="d-s" x="340.0" y="405.5" text-anchor="middle">PPO, fine-tuned under</text>
+<text class="d-s" x="340.0" y="422.5" text-anchor="middle">perception errors</text>
+<rect class="d-box d-learned" x="454" y="366" width="250" height="70" rx="9"/>
+<text class="d-t" x="579.0" y="387.5" text-anchor="middle">Task 5 grasp, insert, push-in</text>
+<text class="d-s" x="579.0" y="405.5" text-anchor="middle">behaviour cloning of the</text>
+<text class="d-s" x="579.0" y="422.5" text-anchor="middle">planned controllers (DART)</text>
+<rect class="d-box d-planned" x="718" y="366" width="196" height="70" rx="9"/>
+<text class="d-t" x="816.0" y="387.5" text-anchor="middle">Transit, park</text>
+<text class="d-s" x="816.0" y="405.5" text-anchor="middle">planned, as in</text>
+<text class="d-s" x="816.0" y="422.5" text-anchor="middle">the teacher</text>
+<path class="d-a" d="M620,308 L620,334" marker-end="url(#ah-student)"/>
+<rect class="d-box d-planned" x="260" y="478" width="240" height="64" rx="9"/>
+<text class="d-t" x="380.0" y="496.5" text-anchor="middle">Arm controller</text>
+<text class="d-s" x="380.0" y="514.5" text-anchor="middle">damped least-squares IK,</text>
+<text class="d-s" x="380.0" y="531.5" text-anchor="middle">gravity-sag compensation</text>
+<rect class="d-box d-neutral" x="560" y="478" width="360" height="64" rx="9"/>
+<text class="d-t" x="740.0" y="505.0" text-anchor="middle">Action chunk to the evaluator</text>
+<text class="d-s" x="740.0" y="523.0" text-anchor="middle">1–16 rows × 16 joint targets, 10 Hz</text>
+<path class="d-a" d="M380,452 L380,476" marker-end="url(#ah-student)"/>
+<path class="d-a" d="M500,510 L558,510" marker-end="url(#ah-student)"/>
+</svg>
+<!-- END diagram:student -->
+    </div>
+    <div class="legend"><span><i class="sw learned"></i>learned</span><span><i class="sw planned"></i>planned or analytic</span><span><i class="sw demo"></i>from the demonstrations</span></div>
+    <figcaption>The student. Everything left of and above the high-level policy turns camera images into a state;
+      everything below it is the teacher's skill machinery. Nothing reads the simulator.</figcaption>
+  </figure>
+
+  <h3>6.1 Perception: keypoints, then geometry</h3>
+  <p>The perception is a class-agnostic detector followed by model-based fitting. A keypoint network finds block
+    corners and edges in each image without knowing which block is which. Identity, pose and confidence come from
+    fitting the known box models to the detections in all four views together, with a tracker that carries each block
+    from call to call.</p>
+  <figure>
+    <div class="card"><img src="assets/img/perception.jpg" width="1936" height="480" alt="Three panels of one camera view: the image, the network's edge map in cyan with corner peaks in yellow and arm-covered block surface in magenta, and the fitted block boxes drawn in orange and white." loading="lazy"></div>
+    <figcaption>One held-out frame from the public dataset (TOWER-SimData, CC BY 4.0), front camera, while the left
+      arm lowers a block. Left: the image. Middle: the network's edge map (cyan), corner peaks (yellow) and block
+      surface covered by the arm (magenta). Right: the boxes fitted jointly over all four cameras, movable blocks in
+      orange and fixed foundation blocks in white. The movable blocks' median error on this frame is 0.14 mm.</figcaption>
+  </figure>
+  <p><b>Network.</b> A U-Net (<a href="#ref-unet">Ronneberger et al., 2015</a>) on a ResNet-34 encoder
+    (<a href="#ref-resnet">He et al., 2016</a>) outputs four full-resolution maps: corners, edges, block surface, and
+    block surface hidden by an arm or finger. Corners and edges are trained with the quality focal loss
+    (<a href="#ref-gfl">Li et al., 2020</a>) against Gaussian targets:</p>
+  $$\mathcal{L}=\mathrm{QFL}(\hat Y^{\text{corner}},Y^{\text{corner}})+\mathrm{QFL}(\hat Y^{\text{edge}},Y^{\text{edge}})
+    +0.5\,\mathrm{BCE}(\hat M,M)+0.5\,\mathrm{BCE}_{w^{+}=5}(\hat O,O),$$
+  $$\mathrm{QFL}(z,y)=\frac{1}{N^{+}}\sum_{\text{pixels}}\big|\sigma(z)-y\big|^{2}\Big[-y\log\sigma(z)-(1-y)\log\big(1-\sigma(z)\big)\Big],$$
+  $$Y(u)=\max_k\exp\!\Big(-\frac{\|u-u_k\|^2}{2\sigma_Y^2}\Big).$$
+  <p class="eq-note">\(\sigma_Y\) is 1.5 px for corners and 1.0 px for edge points; \(N^{+}\) is the number of
+    pixels with target above 0.5; \(M\) the block mask, \(O\) the arm-covered mask (positive weight 5). Training data:
+    28,227 frames rendered from teacher rollouts in our simulator with randomized lighting, plus 2,800 frames of the
+    organizers' dataset, which we sample three times as often; photometric, geometric and JPEG augmentation.
+    On 400 held-out renders, 98.6 % of corners are found within 3 px (97.8 % precision) with a median error of 0.18 px.</p>
+  <p><b>Multi-view fit.</b> Each block is a box with 8 corners and 152 edge samples. Its pose
+    \((R,t)\) minimizes a robust reprojection error over all four cameras (the wrist cameras posed by the arm's forward
+    kinematics), plus a prior from the tracker:</p>
+  $$\begin{aligned}\min_{R,\,t}\;&\sum_{c=1}^{4}\Big[\sum_{i}w_{\text{c}}\,s_{ci}\,\rho\big(\|\pi_c(RX_i+t)-u_{ci}\|\big)
+    +\sum_{j}w_{\text{e}}\,s_{cj}\,\rho\big(|n_{cj}^{\top}(\pi_c(RX_j+t)-e_{cj})|\big)\Big]\\
+    &+\tfrac12\Big\|\begin{bmatrix}t-t_0\\ \log(RR_0^{\top})^{\vee}\end{bmatrix}\Big\|^2_{\Lambda}\end{aligned}$$
+  <p class="eq-note">\(\pi_c\) projects into camera \(c\); \(u_{ci}\) is the corner peak matched to corner \(X_i\);
+    \(e_{cj}\) the nearest edge maximum along the projected edge normal \(n_{cj}\); \(s\) the network's peak values;
+    \(w_{\text{c}}=1\), \(w_{\text{e}}=0.3\). \(\rho\) is the Huber loss (1.5 px) for the first two Gauss-Newton
+    iterations and Tukey's loss (2.5 px) for the remaining four; points hidden by other blocks or by an arm are left
+    out. The tracker's prior \((t_0,R_0)\) has base standard deviations of 10 mm and 0.05 rad, tightened for blocks at
+    rest.</p>
+  <p><b>Tracker.</b> A set of rules rather than a filter: a block that moved last call is predicted to move as much
+    again; a block in a closed gripper follows the gripper's forward kinematics with a slowly updated in-hand offset;
+    resting blocks are low-pass filtered and anchored; a lost moving block coasts for up to five calls; lost blocks are
+    searched for on the table, on other blocks or leaning. Each block gets one of four confidence levels.</p>
+  <p><b>Accuracy and speed.</b> On the organizers' frames, resting blocks are within 0.18 mm (median) and 0.62 mm (90th
+    percentile), held blocks within 0.2 mm (90th percentile). The hard case is an inserted block nearly hidden under the roof of the
+    Task 5 tower (90th percentile 3.5 mm). A call takes about 93 ms on our server, 86 ms of it perception.</p>
+
+  <h3>6.2 The high-level policy</h3>
+  <p>The high-level policy decides what to do next whenever a subtask ends (and every 2 s while idle). It is a
+    transformer encoder (<a href="#ref-transformer">Vaswani et al., 2017</a>) over an unordered set of tokens: one
+    global token (task, time left, perception health), two arm tokens (gripper pose, holding, parked), up to 16 block
+    tokens (estimated pose relative to the pads, confidence, how far it moved, offset to its goal) and up to 9 goal
+    tokens (goal pose, attempts and outcomes so far, which arm can reach it, whether it is done). It has 3 layers, 4
+    heads and width 128, under one million parameters, and decides in 1–5 ms on a CPU. The decision is factorized:
+    first the subtask type (acquire, deliver, push off, insert, push home, park, idle, re-push), then the goal by
+    pointing at a goal token (<a href="#ref-pointer">Vinyals et al., 2015</a>), then the arm:</p>
+  $$p_\psi(o,g,a\mid x)=p_\psi(o\mid x)\;p_\psi(g\mid x,o)\;p_\psi(a\mid x,o,g),\qquad
+    \ell_\psi(g=j\mid x,o)=\frac{(W_k h_j)^{\top}W_q\,[h_{\text{glob}};E_o]}{\sqrt{d}} .$$
+  <p>Invalid choices are masked (for example, delivering a block the arm does not hold). A fourth head predicts, for
+    every goal, whether it is satisfied right now.</p>
+  <p><b>The expert.</b> The labels come from a <b>privileged expert</b>: the task graph's decision logic, but reading
+    the simulator's truth about which goals are satisfied. It closes goals that are done even after a failed check,
+    reopens a finished goal that was disturbed later, never hands a block to the other arm (that recovery failed in
+    206 of 217 tries for the teacher), gives up on tilted blocks, and leaves failed goals that are now buried under
+    later layers alone.</p>
+  <p><b>Behaviour cloning, then DAgger.</b> Rollouts run in the recreated evaluator with block poses passed through
+    a <b>perception-error model</b>: recorded errors of the real estimator, replayed by block class (resting, held,
+    moving, being pushed, foundation, fallen) with their confidence levels and the chance of losing a pushed block as it
+    tips. With probability 0.15 per subtask a failure is injected (a shifted pre-grasp, a dropped block, a shifted goal,
+    an off-centre grip, a short push), so that the data contain recoveries. Round 0 is driven by the expert with 10 %
+    random exploration; three DAgger rounds (<a href="#ref-dagger">Ross et al., 2011</a>) follow, in which the
+    learner's decision is executed and the expert only labels (with probability β the expert's decision is executed
+    instead):</p>
+  $$\mathcal{D}_{i+1}=\mathcal{D}_i\cup\big\{(x,\,\mu^{*}(s))\;:\;s\sim d^{\,\beta_i\mu^{*}+(1-\beta_i)\mu_{\psi_i}}\big\},
+    \qquad \psi_{i+1}=\arg\min_\psi\,\mathcal{L}(\psi;\mathcal{D}_{i+1}),$$
+  $$\mathcal{L}(\psi)=\frac{\sum_b w_b\big[\mathrm{CE}(o^{*}_b)+\mathrm{CE}(g^{*}_b\mid o^{*}_b)+\mathrm{CE}(a^{*}_b\mid o^{*}_b,g^{*}_b)\big]}{\sum_b w_b}
+    +0.5\,\overline{\mathrm{BCE}}\big(\hat y_{bj},y_{bj}\big),\qquad w_b=1+4\,\mathbf{1}[\text{off-nominal}_b].$$
+  <p class="eq-note">\(\beta\) = 0.5, 0, 0.5 in the three DAgger rounds. Off-nominal rows (after a failure, an
+    injection or exploration) weigh five times more. \(y_{bj}\) is the true "goal \(j\) satisfied" flag. Each round
+    retrains from scratch on all data so far: 3,600 episodes and 65,242 decisions in the end. Validation decision
+    accuracy 96.8 % (95.5 % on off-nominal rows); the satisfied-goal head reaches an AUC of 0.999.</p>
+
+  <h3>6.3 Skills in the student</h3>
+  <ul>
+    <li><b>Grasp and place:</b> the teacher's PPO policies, unchanged.</li>
+    <li><b>Push:</b> the teacher's PPO policies fine-tuned under the perception-error model, with two new inputs
+      (whether the target block is currently seen, and for how long it has not been). The teacher's push froze for up
+      to 1.5 s whenever the target was lost, which happens as a block tips over the edge. Success under the error
+      model, robustness cases: 98.8 % (left), 95.4 % (back).</li>
+    <li><b>Task 5 grasp, insert and push-in:</b> distilled from the planned controllers with DART
+      (<a href="#ref-dart">Laskey et al., 2017</a>), so that the networks see the states where the controller has to
+      correct itself.</li>
+    <li><b>Transit and park:</b> planned, as in the teacher.</li>
+  </ul>
+  <p>For DART, a slowly varying perturbation is added to the planned controller's target before every recorded step,
+    and the label is the controller's correction from the perturbed state:</p>
+  $$n_{t+1}=(1-\theta)\,n_t+\sigma\,\varepsilon_t,\qquad \varepsilon_t\sim\mathcal{N}(0,I_6),\quad \theta=0.3,$$
+  $$\mathcal{L}_{\text{BC}}=\frac1N\sum_i\Big[\tfrac16\big\|\tanh f_{1:6}(o_i)-a^{*}_{i,1:6}\big\|^2+0.1\,w_i\,\mathrm{BCE}\big(f_7(o_i),g^{*}_i\big)\Big].$$
+  <p class="eq-note">\(\sigma\) per step is 1 mm and 0.15° (grasp), 0.2 mm and 0.04° (insert), 0.5 mm and 0.1°
+    (push-in), scaled by a factor drawn from U(0, 1.5) per segment. The network is an MLP 68 → 256 → 256 → 256 → 7
+    with tanh-bounded motion outputs and a gripper logit, trained on 328,113 steps from 1,200 episodes. Distilled, the
+    three skills succeed in 83 of 96 Task 5 test episodes against 78 for the planned controllers they imitate. One lesson:
+    when the previous action was an input, the networks learned to copy it and drifted in closed loop; the
+    previous-action input is now masked out.</p>
+
+  <h3>6.4 From the first student to the submitted one</h3>
+  <p>Testing against the official evaluator changed four things between our first student and the submitted one,
+    student v1.3:</p>
+  <ul>
+    <li><b>Camera orientation.</b> On Tasks 1–3 the evaluator delivered the two fixed cameras rotated by 180° relative
+      to the public dataset, which our first student did not expect. The submitted student picks the orientation of
+      each episode by correlating its first images with dataset references.</li>
+    <li><b>Knowing when to stop.</b> Official episodes ran to the full 210 s even after success. A high-level policy
+      never trained on finished tasks sometimes reworked goals that were already done: under our error model, Tasks
+      1–3 succeeded in 1 of 120 episodes without a guard against this and in 120 of 120 with it. The submitted
+      high-level policy was retrained with richer goal tokens (done, moved since, how long ago) and an expert that
+      leaves buried failures alone, and it learned to idle: the guard did not intervene once in 240 test
+      episodes.</li>
+    <li><b>Learned recoveries.</b> The new policy also learned to push a Task 5 block home again when the push-in
+      stopped short, and to redo a failed place at once.</li>
+    <li><b>Two hand-written rules.</b> After the push-down plan, a block seen leaning on the base is pushed again. And a
+      block gripped 4 mm or more off-centre is placed by a slower planned place instead of the learned one: with every
+      grip forced 4–8 mm off-centre on three transfer variants, success fell from 97 % to 81 % with the learned place
+      and returned to 97 % with the rule.</li>
+  </ul>
+  <p>The submitted student is one frozen bundle of networks and configuration files served over a WebSocket, with
+    independent state per evaluation session.</p>
+</section>
+
+<section id="pipeline">
+  <h2>7. Training pipeline</h2>
+  <figure>
+    <div class="diagram" role="img" aria-label="Training pipeline: demonstrations give task plans, layouts, geometry, drive gains and calibration to the recreated evaluator and the teacher. PPO trains the skills; the privileged teacher produces rollouts with injected failures labelled by a privileged expert, DART rollouts of the Task 5 controllers, rendered frames, and recorded estimator errors. These train the high-level policy, the Task 5 networks, the keypoint network and the fine-tuned pushes, which are frozen together with the teacher's grasp and place policies into the student.">
+<!-- BEGIN diagram:pipeline -->
+<svg viewBox="0 0 940 500" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+<style>
+.d-box{stroke-width:1.6}
+.d-learned{fill:var(--teal-bg);stroke:var(--teal)}
+.d-planned{fill:var(--amber-bg);stroke:var(--amber)}
+.d-demo{fill:var(--blue-bg);stroke:var(--blue)}
+.d-priv{fill:var(--grey-bg);stroke:var(--grey);stroke-dasharray:6 4}
+.d-neutral{fill:var(--surface);stroke:var(--rule-strong)}
+.d-group{fill:none;stroke:var(--rule-strong);stroke-dasharray:3 4}
+.d-t{fill:var(--ink);font-size:15.5px;font-weight:650}
+.d-s{fill:var(--muted);font-size:13.5px}
+.d-l{fill:var(--muted);font-size:12.5px;font-style:italic}
+.d-g{fill:var(--muted);font-size:12.5px;font-weight:650;letter-spacing:.04em;text-transform:uppercase}
+.d-a{fill:none;stroke:var(--muted);stroke-width:1.5}
+.d-a.dash{stroke-dasharray:5 4}
+.d-head{fill:var(--muted)}
+</style>
+<defs><marker id="ah-pipeline" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="d-head" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+<rect class="d-box d-demo" x="20" y="20" width="200" height="64" rx="9"/>
+<text class="d-t" x="120.0" y="47.0" text-anchor="middle">Demonstrations</text>
+<text class="d-s" x="120.0" y="65.0" text-anchor="middle">531 episodes, 10 variants</text>
+<rect class="d-box d-demo" x="20" y="110" width="200" height="168" rx="9"/>
+<text class="d-t" x="120.0" y="146.5" text-anchor="middle">Taken from them</text>
+<text class="d-s" x="120.0" y="164.5" text-anchor="middle">task plans (order, arm)</text>
+<text class="d-s" x="120.0" y="181.5" text-anchor="middle">layouts and rest heights</text>
+<text class="d-s" x="120.0" y="198.5" text-anchor="middle">grasp and push geometry</text>
+<text class="d-s" x="120.0" y="215.5" text-anchor="middle">arm drive gains</text>
+<text class="d-s" x="120.0" y="232.5" text-anchor="middle">camera calibration</text>
+<text class="d-s" x="120.0" y="249.5" text-anchor="middle">2,800 labelled frames</text>
+<path class="d-a" d="M120,84 L120,108" marker-end="url(#ah-pipeline)"/>
+<rect class="d-box d-neutral" x="260" y="20" width="200" height="64" rx="9"/>
+<text class="d-t" x="360.0" y="47.0" text-anchor="middle">Recreated evaluator</text>
+<text class="d-s" x="360.0" y="65.0" text-anchor="middle">Isaac Lab, CPU PhysX</text>
+<rect class="d-box d-learned" x="260" y="110" width="200" height="80" rx="9"/>
+<text class="d-t" x="360.0" y="136.5" text-anchor="middle">PPO skill training</text>
+<text class="d-s" x="360.0" y="154.5" text-anchor="middle">GPU, privileged critic,</text>
+<text class="d-s" x="360.0" y="171.5" text-anchor="middle">randomized physics</text>
+<rect class="d-box d-priv" x="260" y="216" width="200" height="84" rx="9"/>
+<text class="d-t" x="360.0" y="244.5" text-anchor="middle">Privileged teacher</text>
+<text class="d-s" x="360.0" y="262.5" text-anchor="middle">task graph, executor,</text>
+<text class="d-s" x="360.0" y="279.5" text-anchor="middle">skills, exact state</text>
+<path class="d-a" d="M220,140 L258,60" marker-end="url(#ah-pipeline)"/>
+<path class="d-a" d="M220,200 L258,250" marker-end="url(#ah-pipeline)"/>
+<path class="d-a" d="M360,84 L360,108" marker-end="url(#ah-pipeline)"/>
+<path class="d-a" d="M360,190 L360,214" marker-end="url(#ah-pipeline)"/>
+<path class="d-a" d="M460,258 L480,258"/>
+<path class="d-a" d="M480,52 L480,328"/>
+<path class="d-a" d="M480,52 L498,52" marker-end="url(#ah-pipeline)"/>
+<rect class="d-box d-neutral" x="500" y="20" width="210" height="64" rx="9"/>
+<text class="d-t" x="605.0" y="38.5" text-anchor="middle">Rollouts, injected failures</text>
+<text class="d-s" x="605.0" y="56.5" text-anchor="middle">labelled by a privileged</text>
+<text class="d-s" x="605.0" y="73.5" text-anchor="middle">expert; perception errors</text>
+<rect class="d-box d-learned" x="740" y="20" width="180" height="64" rx="9"/>
+<text class="d-t" x="830.0" y="47.0" text-anchor="middle">High-level policy</text>
+<text class="d-s" x="830.0" y="65.0" text-anchor="middle">BC, then 3 DAgger rounds</text>
+<path class="d-a" d="M710,52 L738,52" marker-end="url(#ah-pipeline)"/>
+<path class="d-a" d="M480,144 L498,144" marker-end="url(#ah-pipeline)"/>
+<rect class="d-box d-neutral" x="500" y="112" width="210" height="64" rx="9"/>
+<text class="d-t" x="605.0" y="130.5" text-anchor="middle">Rollouts with DART noise</text>
+<text class="d-s" x="605.0" y="148.5" text-anchor="middle">of the planned Task 5</text>
+<text class="d-s" x="605.0" y="165.5" text-anchor="middle">controllers</text>
+<rect class="d-box d-learned" x="740" y="112" width="180" height="64" rx="9"/>
+<text class="d-t" x="830.0" y="139.0" text-anchor="middle">Task 5 skills</text>
+<text class="d-s" x="830.0" y="157.0" text-anchor="middle">behaviour cloning</text>
+<path class="d-a" d="M710,144 L738,144" marker-end="url(#ah-pipeline)"/>
+<path class="d-a" d="M480,236 L498,236" marker-end="url(#ah-pipeline)"/>
+<rect class="d-box d-neutral" x="500" y="204" width="210" height="64" rx="9"/>
+<text class="d-t" x="605.0" y="222.5" text-anchor="middle">Rendered frames</text>
+<text class="d-s" x="605.0" y="240.5" text-anchor="middle">28k, random lighting,</text>
+<text class="d-s" x="605.0" y="257.5" text-anchor="middle">+ organizer frames</text>
+<rect class="d-box d-learned" x="740" y="204" width="180" height="64" rx="9"/>
+<text class="d-t" x="830.0" y="231.0" text-anchor="middle">Keypoint network</text>
+<text class="d-s" x="830.0" y="249.0" text-anchor="middle">supervised heatmaps</text>
+<path class="d-a" d="M710,236 L738,236" marker-end="url(#ah-pipeline)"/>
+<path class="d-a" d="M480,328 L498,328" marker-end="url(#ah-pipeline)"/>
+<rect class="d-box d-neutral" x="500" y="296" width="210" height="64" rx="9"/>
+<text class="d-t" x="605.0" y="314.5" text-anchor="middle">Perception-error model</text>
+<text class="d-s" x="605.0" y="332.5" text-anchor="middle">recorded estimator errors,</text>
+<text class="d-s" x="605.0" y="349.5" text-anchor="middle">replayed by block class</text>
+<rect class="d-box d-learned" x="740" y="296" width="180" height="64" rx="9"/>
+<text class="d-t" x="830.0" y="314.5" text-anchor="middle">Push fine-tuning</text>
+<text class="d-s" x="830.0" y="332.5" text-anchor="middle">PPO under perception</text>
+<text class="d-s" x="830.0" y="349.5" text-anchor="middle">errors</text>
+<path class="d-a" d="M710,328 L738,328" marker-end="url(#ah-pipeline)"/>
+<path class="d-a dash" d="M770,268 L770,282 L640,282 L640,294" marker-end="url(#ah-pipeline)"/>
+<rect class="d-box d-neutral" x="500" y="410" width="420" height="72" rx="9"/>
+<text class="d-t" x="710.0" y="441.0" text-anchor="middle">Student v1.3: one frozen bundle</text>
+<text class="d-s" x="710.0" y="459.0" text-anchor="middle">perception, high-level policy, all skills, task plans</text>
+<path class="d-a" d="M920,52 L932,52 L932,446"/>
+<path class="d-a" d="M920,52 L932,52"/>
+<path class="d-a" d="M920,144 L932,144"/>
+<path class="d-a" d="M920,236 L932,236"/>
+<path class="d-a" d="M920,328 L932,328"/>
+<path class="d-a" d="M932,446 L922,446" marker-end="url(#ah-pipeline)"/>
+<path class="d-a" d="M360,300 L360,446 L498,446" marker-end="url(#ah-pipeline)"/>
+<text class="d-l" x="368" y="420">grasp and place</text><text class="d-l" x="368" y="436">policies, unchanged</text>
+</svg>
+<!-- END diagram:pipeline -->
+    </div>
+    <div class="legend"><span><i class="sw learned"></i>learned</span><span><i class="sw demo"></i>from the demonstrations</span><span><i class="sw priv"></i>privileged</span></div>
+    <figcaption>How student v1.3 is built. The dashed arrow closes the loop: the trained keypoint network, run on
+      rendered images, provides the error traces that the perception-error model replays.</figcaption>
+  </figure>
+  <p>Rebuilding the submission from the public downloads takes about 40 hours on one RTX A5000 (24 GB) and a 24-thread
+    CPU: PPO on the GPU, rollouts and every acceptance test on CPU physics.</p>
+
+  <h3>Lessons</h3>
+  <ul>
+    <li><b>Check the real observations of every task.</b> The camera rotation on Tasks 1–3 cost us a whole official
+      run's worth of perception on those tasks.</li>
+    <li><b>Reproduce the official scoring locally.</b> Run every episode to the time limit and judge the final arrangement;
+      behaviour after success matters.</li>
+    <li><b>The CPU solver is the evaluator.</b> Skills trained on the GPU move differently on the CPU; accept only on
+      the CPU.</li>
+    <li><b>Never feed a cloned network its own previous action.</b> It learns to copy it.</li>
+    <li><b>Train under the deployment's information pattern.</b> Chunked observations (below) and target losses
+      (pushes) had to be part of training, not patched in afterwards.</li>
+    <li><b>After an environment or reward redesign, retrain from scratch.</b> Resumed runs inherited bad habits.</li>
+  </ul>
+</section>
+
+<section id="results">
+  <h2>8. Results (local evaluation)</h2>
+  <div class="callout note">Official results are announced at the G2A workshop at CoRL 2026 (Austin, November 12). This
+    page will be updated with them. The numbers below are from our own recreation of the evaluator and our own
+    reconstruction of its scoring.</div>
+  <p>We test the student two ways. On <b>CPU physics with the perception-error model</b>, many episodes are cheap.
+    In the <b>closed loop on rendered camera images</b>, our simulator renders the four cameras and the student's real
+    perception runs on them; this is the closest to the official setting we have, but slow and not deterministic.
+    Both run every episode to 210 s and judge success on the final arrangement, as the official evaluation did. Every
+    test covers the ten robustness cases.</p>
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th>Variant</th><th>Operations</th><th>Error model: success</th><th>Error model: progress</th><th>Rendered cameras: success</th></tr>
+      </thead>
+      <tbody class="num">
+        <tr><td>1-2 Transfer</td><td>4</td><td>24 / 24</td><td>100 %</td><td>10 / 10</td></tr>
+        <tr><td>1-3 Transfer</td><td>6</td><td>21 / 24</td><td>99.0 %</td><td>10 / 10</td></tr>
+        <tr><td>2-2 Cross transfer</td><td>2</td><td>24 / 24</td><td>100 %</td><td>9 / 10</td></tr>
+        <tr><td>2-3 Cross transfer</td><td>3</td><td>23 / 24</td><td>99.3 %</td><td>10 / 10</td></tr>
+        <tr><td>3-2 Vertical stacking</td><td>2</td><td>24 / 24</td><td>100 %</td><td>10 / 10</td></tr>
+        <tr><td>3-3 Vertical stacking</td><td>3</td><td>24 / 24</td><td>100 %</td><td>10 / 10</td></tr>
+        <tr><td>4-2 Push-down</td><td>6</td><td>10 / 24</td><td>86.1 %</td><td>8 / 10, 5 / 10</td></tr>
+        <tr><td>4-3 Push-down</td><td>9</td><td>0 / 24</td><td>70.4 %</td><td>0 / 10</td></tr>
+        <tr><td>5-2 Insertion</td><td>1</td><td>15 / 24</td><td>81.2 %</td><td>8 / 10</td></tr>
+        <tr><td>5-3 Insertion</td><td>2</td><td>18 / 24</td><td>89.6 %</td><td>2 / 10, 7 / 10</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="caption">Student v1.3. Error model: 24 episodes per variant over two seeds. Rendered cameras: 10 episodes per
+    variant per seed; two seeds where two numbers are given. Progress is our reconstruction of the operation-level
+    progress rate.</p>
+  <ul>
+    <li><b>Transfer and stacking are nearly solved:</b> 59 of 60 episodes on rendered cameras. The one failure (2-2,
+      high friction) was a place that opened 14 mm above its goal; the high-friction fingers flung the block out of
+      every camera's view.</li>
+    <li><b>Push-down is where most points are lost.</b> A success needs every block of the tower pushed clear without
+      disturbing the rest. On 4-3 (nine pushes), 55 of the 90 pushed blocks ended flat and clear of the base, but no
+      episode got all nine. The usual failures: a push drags a neighbour along, an early top-layer push shifts the
+      rows below, lower-layer blocks land on the debris of the upper ones, and a lost block's coasted estimate ends a
+      push too early, leaving the block leaning on the base.</li>
+    <li><b>Insertion</b> fails mostly at the very end: the inserted block is nearly hidden under the roof, its
+      estimated depth can be off by 5–10 mm, and the push-in stops short. The rendered-camera results on 5-3 swing from
+      2 to 7 of 10 between seeds, a reminder of how noisy ten-episode tests are.</li>
+  </ul>
+<!-- BEGIN videos:failure -->
+  <figure>
+    <video src="assets/video/failure.mp4" poster="assets/img/failure_poster.jpg" controls muted playsinline preload="none"
+           aria-label="A failed three-layer push-down episode, four camera views"></video>
+    <figcaption>A three-layer push-down that fails, from the same renders (nominal case, 2× speed). The pushes of the top two layers succeed, but blocks of the bottom layer come to rest on the debris of the upper layers, where the cameras lose track of them: the white boxes are their true poses, far from the student's estimates. Eight of the nine pushes count; the task needs all nine.</figcaption>
+  </figure>
+<!-- END videos:failure -->
+  <h3>Did distillation work?</h3>
+  <p>The fair comparison is teacher and student on the same rendered images, so that both depend on the same
+    perception. For our first student (same skills and perception as the submission, an earlier high-level policy),
+    on all ten variants with 8 nominal and 8 robustness-case episodes each, the student succeeded in 135 of 160
+    episodes and the teacher in 131. The student matches its teacher; what limits both is perception and contact on
+    Tasks 4 and 5, not the decisions.</p>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th></th><th>1-2</th><th>1-3</th><th>2-2</th><th>2-3</th><th>3-2</th><th>3-3</th><th>4-2</th><th>4-3</th><th>5-2</th><th>5-3</th><th>Total</th></tr></thead>
+      <tbody class="num">
+        <tr><td>Student</td><td>16</td><td>16</td><td>16</td><td>16</td><td>16</td><td>16</td><td>9</td><td>9</td><td>12</td><td>9</td><td>135</td></tr>
+        <tr><td>Teacher</td><td>16</td><td>15</td><td>16</td><td>16</td><td>16</td><td>15</td><td>9</td><td>6</td><td>12</td><td>10</td><td>131</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="caption">Successes out of 16 per variant (8 nominal, 8 robustness cases), both policies on block poses
+    estimated from our rendered images. Episodes in this test ended at success.</p>
+</section>
+
+<section id="videos">
+  <h2>9. Videos</h2>
+  <p>Student v1.3 in the closed loop on our rendered images: the front camera (top left), the camera behind the left
+    arm (top right) and the two wrist cameras, exactly the images the student receives, with its own estimates of the
+    block poses drawn on top. One frame is shown per policy call, so arm motions that send 16 rows per call appear sped
+    up.</p>
+  <p class="caption">Box colours: <b style="color:#2fb52f">green</b> blocks seen with full confidence,
+    <b style="color:#d23ad2">magenta</b> the block of the current subtask (labelled with its name: source or
+    destination tower, layer, position), <b style="color:#1aa6a6">cyan</b> a block in the gripper,
+    <b style="color:#3f7fe0">blue</b> foundation blocks, <b style="color:#c9a400">yellow</b>, <b style="color:#e07800">orange</b>
+    and <b style="color:#e03030">red</b> lower confidence, not found in this call, or lost. A white box is the simulator's true
+    pose, drawn only where the estimate is more than 2 mm off; the student never sees it.</p>
+  <div class="videos">
+<!-- BEGIN videos:families -->
+    <figure>
+      <video src="assets/video/transfer.mp4" poster="assets/img/transfer_poster.jpg" autoplay muted loop playsinline preload="none"
+             aria-label="Transfer: the student's four camera views"></video>
+      <figcaption><b>Transfer.</b> Task 1-3: six blocks, top layer first, the two arms alternating by layer.</figcaption>
+    </figure>
+    <figure>
+      <video src="assets/video/cross.mp4" poster="assets/img/cross_poster.jpg" autoplay muted loop playsinline preload="none"
+             aria-label="Cross transfer: the student's four camera views"></video>
+      <figcaption><b>Cross transfer.</b> Task 2-3: the centre block of each layer, rebuilt as a cross on the other pad.</figcaption>
+    </figure>
+    <figure>
+      <video src="assets/video/stacking.mp4" poster="assets/img/stacking_poster.jpg" autoplay muted loop playsinline preload="none"
+             aria-label="Vertical stacking: the student's four camera views"></video>
+      <figcaption><b>Vertical stacking.</b> Task 3-3: single blocks stacked by the back arm, centres aligned.</figcaption>
+    </figure>
+    <figure>
+      <video src="assets/video/pushdown.mp4" poster="assets/img/pushdown_poster.jpg" autoplay muted loop playsinline preload="none"
+             aria-label="Push-down: the student's four camera views"></video>
+      <figcaption><b>Push-down.</b> Task 4-3: every block pushed off the tower, top layer first, with closed fingers.</figcaption>
+    </figure>
+    <figure>
+      <video src="assets/video/insertion.mp4" poster="assets/img/insertion_poster.jpg" autoplay muted loop playsinline preload="none"
+             aria-label="Insertion: the student's four camera views"></video>
+      <figcaption><b>Insertion.</b> Task 5-3: blocks inserted into the tower's centre slots, then pushed home.</figcaption>
+    </figure>
+<!-- END videos:families -->
+  </div>
+  <h3>All ten variants</h3>
+  <div class="player">
+    <video id="sv" controls preload="metadata" playsinline poster="assets/img/full_poster.jpg">
+      <source src="assets/video/all_variants.mp4" type="video/mp4">
+      Your browser cannot play this video. <a href="assets/video/all_variants.mp4">Download it (MP4)</a>.
+    </video>
+  </div>
+  <p class="caption">4:47, silent. One nominal episode of every variant (the first successful one of two rendered),
+    then two robustness cases, heavy blocks and changed lighting. Each starts with a card that gives its outcome and
+    the simulated time at which it succeeded. Of the twenty nominal episodes we rendered, eighteen succeeded; the two
+    that did not were one three-layer push-down (shown in the results above) and one three-layer insertion.
+    <a href="assets/video/all_variants.mp4" download>Download the video (MP4, 17&nbsp;MB)</a>. Chapters:</p>
+  <ul class="chapters">
+<!-- BEGIN videos:chapters -->
+    <li><button data-t="0.0"><span class="t">0:00</span><span>Task 1-2: Tower transfer, 2 layers</span></button></li>
+    <li><button data-t="25.4"><span class="t">0:25</span><span>Task 1-3: Tower transfer, 3 layers</span></button></li>
+    <li><button data-t="63.6"><span class="t">1:03</span><span>Task 2-2: Cross transfer, 2 layers</span></button></li>
+    <li><button data-t="77.7"><span class="t">1:17</span><span>Task 2-3: Cross transfer, 3 layers</span></button></li>
+    <li><button data-t="97.5"><span class="t">1:37</span><span>Task 3-2: Vertical stacking, 2 layers</span></button></li>
+    <li><button data-t="111.1"><span class="t">1:51</span><span>Task 3-3: Vertical stacking, 3 layers</span></button></li>
+    <li><button data-t="130.4"><span class="t">2:10</span><span>Task 4-2: Push-down, 2 layers</span></button></li>
+    <li><button data-t="149.4"><span class="t">2:29</span><span>Task 4-3: Push-down, 3 layers</span></button></li>
+    <li><button data-t="180.4"><span class="t">3:00</span><span>Task 5-2: Insertion, 2 layers</span></button></li>
+    <li><button data-t="204.3"><span class="t">3:24</span><span>Task 5-3: Insertion, 3 layers</span></button></li>
+    <li><button data-t="254.4"><span class="t">4:14</span><span>Task 2-3: Cross transfer, 3 layers, heavy blocks</span></button></li>
+    <li><button data-t="274.2"><span class="t">4:34</span><span>Task 3-2: Vertical stacking, 2 layers, changed lighting</span></button></li>
+<!-- END videos:chapters -->
+  </ul>
+</section>
+
+<section id="next">
+  <h2>10. Next steps: student v1.5 and more learned components</h2>
+  <p>The submitted student still plans every free-space arm motion: the transits between skills follow an inverse
+    kinematics path with fixed timing. After the deadline we replaced them with learned reaching, which did not get an
+    official evaluation because submissions had closed. We include it because it shows the point of the agentic
+    structure: one planned component was swapped for a learned one without retraining the high-level policy or any
+    other skill.</p>
+  <div class="tablewrap">
+    <table class="grid-table">
+      <thead><tr><th>Component</th><th class="l">Teacher</th><th class="l">Student v1.3 (submitted)</th><th class="l">Student v1.5 (after the deadline)</th></tr></thead>
+      <tbody>
+        <tr><td>Block state</td><td><span class="chip priv">simulator</span></td><td><span class="chip learned">keypoint network</span> + <span class="chip planned">fit</span></td><td><span class="chip learned">keypoint network</span> + <span class="chip planned">fit</span></td></tr>
+        <tr><td>What to do next</td><td><span class="chip planned">task graph</span></td><td><span class="chip learned">high-level policy</span></td><td><span class="chip learned">high-level policy</span></td></tr>
+        <tr><td>Grasp, place</td><td><span class="chip learned">PPO</span></td><td><span class="chip learned">PPO</span></td><td><span class="chip learned">PPO</span></td></tr>
+        <tr><td>Push</td><td><span class="chip learned">PPO</span></td><td><span class="chip learned">PPO, fine-tuned</span></td><td><span class="chip learned">PPO, fine-tuned</span></td></tr>
+        <tr><td>Task 5 grasp, insert, push-in</td><td><span class="chip planned">planned</span></td><td><span class="chip learned">behaviour cloning</span></td><td><span class="chip learned">behaviour cloning</span></td></tr>
+        <tr><td>Moving between skills</td><td><span class="chip planned">planned</span></td><td><span class="chip planned">planned</span></td><td><span class="chip learned">PPO reacher</span><small>except the short moves before a push and a push-in</small></td></tr>
+        <tr><td>Parking, arm controller</td><td><span class="chip planned">planned</span></td><td><span class="chip planned">planned</span></td><td><span class="chip planned">planned</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="caption">Learned and planned components across versions. Student v1.4 and v1.5 are the same system with
+    learned reaching; v1.5 uses a later checkpoint of the back arm's reacher.</p>
+
+  <h3>Learned reaching</h3>
+  <p>The reacher follows our earlier work on joint-space reaching with reinforcement learning, JAiLeR
+    (<a href="#ref-jailer">Kumar et al., 2021</a>): a goal-conditioned PPO policy per arm that outputs joint velocities
+    directly, without inverse kinematics. The goal is a pose for the gripper. During a transit it slides from waypoint to
+    waypoint at a speed limit (0.05 m/s for the left arm and 0.15 m/s for the back arm when carrying a block), so the
+    reacher always tracks a nearby moving goal. Training includes carrying blocks of random mass and friction with
+    random grip offsets.</p>
+  $$v=1.5\,\big(0.3\,a+0.7\,a\odot|a|\big)\ \text{rad/s},\qquad q_{\text{des}}\leftarrow q_{\text{des}}+0.1\,v,$$
+  $$d=\sum_{i=1}^{3}\big\|(g+\ell R_g e_i)-(p+\ell R_p e_i)\big\|,\qquad \ell=0.1\,\text{m},$$
+  $$\begin{aligned}r={}&e^{-20d^2}+e^{-(d/2\,\text{cm})^2}+e^{-(d/6\,\text{cm})^2}-2d+2\,r^{\text{hold}}+5\,\mathbf{1}[\text{settled}]\\
+    &-0.005\,\|\ddot q\|-0.1\,\|\Delta a^{\text{raw}}\|^2-0.5\sum_k\max\big(0,|a^{\text{raw}}_k|-1\big)-\dots\end{aligned}$$
+  $$r^{\text{hold}}=\exp\!\Big(-\big(e_p/4\,\text{mm}\big)^2-\big(e_r/2^\circ\big)^2-\big(\max_k|\dot q_k|/0.05\big)^2\Big).$$
+  <p class="eq-note">\(d\) compares three points 10 cm along each axis of the goal frame \((g,R_g)\) and of the
+    gripper frame \((p,R_p)\). The first term is JAiLeR's; the two wider Gaussians give gradient from far away, and
+    \(r^{\text{hold}}\) rewards staying still on the goal. The remaining penalties keep the joints off their limits and the
+    gripper off the table, and, when carrying, punish slip and drops. The action costs act on the raw network output,
+    not the clipped command; otherwise PPO gets no gradient from them.</p>
+  <p><b>Training under the deployment's information pattern.</b> The evaluator executes up to 16 rows per call, so the
+    reacher must act for up to 1.6 s without a new measurement. A reacher trained with a fresh measurement every step
+    failed under 16-row chunks: it carried blocks at about twice the goal's speed, dropped held blocks and fell into
+    limit cycles. We retrained it with chunked observations: inside a chunk, the policy sees the joint prediction
+    \(q_{\text{des}}-(q_{\text{des}}-q)_{\text{first row}}\) and the number of rows since the last measurement.
+    That alone fixed it.</p>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Measure</th><th>Planned transits</th><th>Learned reaching</th></tr></thead>
+      <tbody class="num">
+        <tr><td>Arrival error on held-out transits, median (left / back)</td><td>–</td><td>1.1 mm, 0.62° / 0.9 mm, 0.35°</td></tr>
+        <tr><td>Held blocks dropped while carrying, seven robustness cases</td><td>–</td><td>0</td></tr>
+        <tr><td>Teacher episode length, examples: 1-2, 2-2, 3-3</td><td>81.9 s, 48.0 s, 56.5 s</td><td>69.4 s, 34.6 s, 38.8 s</td></tr>
+        <tr><td>Policy calls spent on transits (variants it drives)</td><td>100 %</td><td>52–62 %</td></tr>
+        <tr><td>Teacher, all ten variants (successes of 160)</td><td>141</td><td>141</td></tr>
+        <tr><td>Student, rendered cameras, Tasks 1–3 (of 60)</td><td>59</td><td>59</td></tr>
+        <tr><td>Student, rendered cameras, Task 5 (5-2 of 10; 5-3 of 20)</td><td>8; 9</td><td>8; 9</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="caption">Arrival errors, drops, episode lengths and teacher results: CPU physics. Student rows: closed loop
+    on rendered cameras, the same seeds for both. Learned reaching drives every transit except the short moves before a
+    push or a push-in: there, contact skills were sensitive to the exact arm posture the transit left behind, and the learned
+    arrivals cost Task 4 and 5 episodes. Student v1.4 and v1.5 differ only in the back arm's reacher checkpoint; in a
+    paired comparison over 512 episodes they succeeded in 493 and 491 (no detectable difference).</p>
+<!-- BEGIN videos:reaching -->
+  <figure>
+    <video src="assets/video/reaching.mp4" poster="assets/img/reaching_poster.jpg" controls muted loop playsinline preload="none"
+           aria-label="The same episode with planned transits and with learned reaching, front camera"></video>
+    <figcaption>The same Task 1-3 episode (same layout and seed) with planned transits (left, student v1.3) and learned reaching (right, student v1.5), front camera, one frame per policy call, 2× speed. Student v1.3 finishes at 127 s of simulated time in 362 policy calls; student v1.5 at 112 s in 320. One episode each; the rendered closed loop is not deterministic.</figcaption>
+  </figure>
+<!-- END videos:reaching -->
+  <p>The reacher makes the plans faster and the arm motions closed-loop while keeping success where it was. It does not
+    yet buy points, because the points are lost in pushing and insertion. The directions we see from here:</p>
+  <ul>
+    <li><b>Push-down</b> (where most points are lost): pushes that stop on what the camera sees rather than on a coasted
+      estimate, a learned decision of when a push is done, and pushes that do not drag neighbours.</li>
+    <li><b>Use the high-level policy's "goal satisfied" head</b> as the judge of when a subtask is done, in place of
+      hand-written success checks.</li>
+    <li><b>A place policy trained on off-centre grips</b>, to retire the hand-written slow place.</li>
+    <li><b>Learned reaching everywhere:</b> arrival postures matched to the next contact skill, so that the moves before
+      a push and a push-in can be learned too; recovery pushes.</li>
+  </ul>
+</section>
+
+<section id="reproduce">
+  <h2>11. Reproducibility</h2>
+  <p>The code is at <a href="https://github.com/VisakK/tower_rl">github.com/VisakK/tower_rl</a>. Its
+    <a href="https://github.com/VisakK/tower_rl/blob/main/reproduce/README.md"><code>reproduce/</code></a> folder
+    rebuilds student v1.3 from the public downloads in seven stages, one script each: data, teacher, perception,
+    student, freezing the bundle, checks with the numbers to compare against, and serving it on the challenge
+    protocol. It needs Isaac Sim 5.1 and Isaac Lab 2.3 and about 40 hours on one GPU. Trained weights are not in the
+    repository. GPU training is not bit-exact, so a rebuild gives an equivalent policy rather than identical
+    bytes.</p>
+</section>
+
+<section id="refs">
+  <h2>References</h2>
+  <ol class="refs">
+    <li id="ref-ppo">J. Schulman, F. Wolski, P. Dhariwal, A. Radford, O. Klimov. Proximal Policy Optimization Algorithms. arXiv:1707.06347, 2017.</li>
+    <li id="ref-gae">J. Schulman, P. Moritz, S. Levine, M. Jordan, P. Abbeel. High-Dimensional Continuous Control Using Generalized Advantage Estimation. ICLR, 2016.</li>
+    <li id="ref-asym">L. Pinto, M. Andrychowicz, P. Welinder, W. Zaremba, P. Abbeel. Asymmetric Actor Critic for Image-Based Robot Learning. RSS, 2018.</li>
+    <li id="ref-dagger">S. Ross, G. Gordon, J. A. Bagnell. A Reduction of Imitation Learning and Structured Prediction to No-Regret Online Learning. AISTATS, 2011.</li>
+    <li id="ref-dart">M. Laskey, J. Lee, R. Fox, A. Dragan, K. Goldberg. DART: Noise Injection for Robust Imitation Learning. CoRL, 2017.</li>
+    <li id="ref-options">R. S. Sutton, D. Precup, S. Singh. Between MDPs and Semi-MDPs: A Framework for Temporal Abstraction in Reinforcement Learning. Artificial Intelligence, 1999.</li>
+    <li id="ref-jailer">V. Kumar, D. Hoeller, B. Sundaralingam, J. Tremblay, S. Birchfield. Joint Space Control via Deep Reinforcement Learning. IROS, 2021. <a href="https://arxiv.org/abs/2011.06332">arXiv:2011.06332</a>.</li>
+    <li id="ref-gfl">X. Li, W. Wang, L. Wu, S. Chen, X. Hu, J. Li, J. Tang, J. Yang. Generalized Focal Loss: Learning Qualified and Distributed Bounding Boxes for Dense Object Detection. NeurIPS, 2020.</li>
+    <li id="ref-unet">O. Ronneberger, P. Fischer, T. Brox. U-Net: Convolutional Networks for Biomedical Image Segmentation. MICCAI, 2015.</li>
+    <li id="ref-resnet">K. He, X. Zhang, S. Ren, J. Sun. Deep Residual Learning for Image Recognition. CVPR, 2016.</li>
+    <li id="ref-transformer">A. Vaswani et al. Attention Is All You Need. NeurIPS, 2017.</li>
+    <li id="ref-pointer">O. Vinyals, M. Fortunato, N. Jaitly. Pointer Networks. NeurIPS, 2015.</li>
+    <li id="ref-rslrl">N. Rudin, D. Hoeller, P. Reist, M. Hutter. Learning to Walk in Minutes Using Massively Parallel Deep Reinforcement Learning. CoRL, 2022.</li>
+    <li id="ref-isaaclab">M. Mittal et al. Orbit: A Unified Simulation Framework for Interactive Robot Learning Environments. IEEE RA-L, 2023 (now Isaac Lab).</li>
+    <li id="ref-tower">TOWER Benchmark contributors. TOWER-SimData and TOWER-Assets. Hugging Face, 2026. CC BY 4.0.</li>
+  </ol>
+</section>
+
+<section id="bibtex">
+  <h2>BibTeX</h2>
+  <div class="bib">
+    <button class="copy" type="button">Copy</button>
+<pre id="bibtext">@misc{kumar2026agentic,
+  title        = {Plans from Demonstrations, Skills from Reinforcement
+                  Learning: An Agentic Teacher and Student for
+                  Long-Horizon Bimanual Tower Manipulation},
+  author       = {Kumar, Visak},
+  year         = {2026},
+  month        = nov,
+  howpublished = {Blog post},
+  url          = {https://visakk.github.io/agentic-tower/}
+}</pre>
+  </div>
+</section>
+
+<footer>
+  <p>All results are in simulation (Isaac Sim and Isaac Lab, PhysX). Built for the TOWER challenge at the G2A workshop
+    (CoRL 2026); not affiliated with or endorsed by the organizers.</p>
+  <p>Demonstration frames, previews and the station and block assets are from TOWER-SimData and TOWER-Assets by the
+    TOWER Benchmark contributors, licensed under CC BY 4.0; we cropped, arranged, re-rendered and annotated them. The
+    station includes the AgileX arm model (MIT License). Policies trained with rsl_rl.</p>
+  <p>Code, task graphs and recovery rules were written with Claude Code (Anthropic), offline; no language model runs
+    in the deployed system.</p>
+</footer>
+
+</div>
+<script>
+  (function () {
+    var v = document.getElementById('sv');
+    var buttons = Array.prototype.slice.call(document.querySelectorAll('.chapters button'));
+    function seek(t) {
+      if (!v) { return; }
+      v.currentTime = t;
+      var p = v.play();
+      if (p && p.catch) { p.catch(function () {}); }
+    }
+    buttons.forEach(function (b) {
+      b.addEventListener('click', function () { seek(parseFloat(b.dataset.t)); });
+    });
+    if (v) {
+      v.addEventListener('timeupdate', function () {
+        var cur = null;
+        buttons.forEach(function (b) { if (v.currentTime >= parseFloat(b.dataset.t) - 0.05) { cur = b; } });
+        buttons.forEach(function (b) { b.classList.toggle('on', b === cur); });
+      });
+    }
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      document.querySelectorAll('video[autoplay]').forEach(function (el) {
+        el.removeAttribute('autoplay');
+        el.pause();
+        el.controls = true;
+      });
+    }
+    var copy = document.querySelector('.copy');
+    copy.addEventListener('click', function () {
+      var text = document.getElementById('bibtext').textContent;
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(text).then(function () {
+          copy.textContent = 'Copied';
+          setTimeout(function () { copy.textContent = 'Copy'; }, 1500);
+        });
+      }
+    });
+  })();
+</script>
+</body>
+</html>
